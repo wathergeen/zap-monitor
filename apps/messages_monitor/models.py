@@ -35,6 +35,18 @@ class WebhookEvent(models.Model):
         return f"WebhookEvent #{self.pk} - {self.event_type} ({self.status})"
 
 
+class MessageQuerySet(models.QuerySet):
+    """QuerySet customizado para consultas expressivas sobre mensagens."""
+
+    def deleted(self):
+        """Retorna apenas mensagens que foram apagadas/removidas."""
+        return self.filter(deleted_at__isnull=False)
+
+    def active(self):
+        """Retorna apenas mensagens ativas (não apagadas)."""
+        return self.filter(deleted_at__isnull=True)
+
+
 class Message(models.Model):
     """
     Mensagem capturada de grupo monitorado.
@@ -69,6 +81,8 @@ class Message(models.Model):
     # Campo de busca full-text com configuração portuguesa
     search_vector = SearchVectorField("Vetor de Busca FTS", null=True, blank=True)
 
+    objects = MessageQuerySet.as_manager()
+
     class Meta:
         verbose_name = "Mensagem"
         verbose_name_plural = "Mensagens"
@@ -82,6 +96,11 @@ class Message(models.Model):
     def __str__(self):
         preview = (self.text[:40] + "...") if len(self.text) > 40 else self.text
         return f"[{self.sent_at:%d/%m/%Y %H:%M}] {self.member.display_name}: {preview}"
+
+    @property
+    def is_deleted(self) -> bool:
+        """Indica se a mensagem foi apagada/removida no WhatsApp."""
+        return self.deleted_at is not None
 
     def update_search_vector(self):
         """Atualiza o vetor FTS no Postgres."""

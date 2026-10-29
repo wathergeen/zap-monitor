@@ -68,6 +68,15 @@ def _extract_group_jid_and_from_me(payload: dict) -> tuple[str, bool]:
         return "", False
 
     first_item = items[0]
+
+    # Suporte a eventos de exclusão com lista de keys: data.keys ou data[0].keys
+    if "keys" in first_item and isinstance(first_item["keys"], list) and first_item["keys"]:
+        first_key = first_item["keys"][0]
+        if isinstance(first_key, dict):
+            remote_jid = first_key.get("remoteJid") or ""
+            from_me = bool(first_key.get("fromMe", False))
+            return str(remote_jid), from_me
+
     key = first_item.get("key") or {}
 
     remote_jid = (
@@ -109,9 +118,9 @@ def evolution_webhook_view(request: HttpRequest) -> HttpResponse:
     # 3. Identificação do tipo do evento
     event_type = str(payload.get("event") or payload.get("type") or "UNKNOWN").upper()
 
-    # 4. Descarte rápido de mensagens do próprio bot (fromMe)
+    # 4. Descarte rápido de mensagens do próprio bot (fromMe), exceto se for evento de exclusão
     remote_jid, from_me = _extract_group_jid_and_from_me(payload)
-    if from_me:
+    if from_me and "DELETE" not in event_type:
         return JsonResponse({"status": "ignored", "reason": "from_me"}, status=200)
 
     # 5. Descarte rápido de mensagens que não sejam de grupos (@g.us) ou de grupos não monitorados

@@ -73,11 +73,37 @@
 
   <!-- Linha do Tempo de Mensagens -->
   <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-6 space-y-4">
-    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
-      <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-        Histórico e Conteúdo de Mensagens
-      </h3>
-      <span class="text-xs text-slate-400">Somente leitura</span>
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
+      <div class="flex items-center space-x-2.5">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Histórico e Conteúdo de Mensagens
+        </h3>
+        {% if deleted_messages_count > 0 %}
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/60">
+            {{ deleted_messages_count }} removida{{ deleted_messages_count|pluralize }}
+          </span>
+        {% endif %}
+      </div>
+      <!-- Filtros da Linha do Tempo com HTMX -->
+      <form method="get"
+            hx-get="{% url 'dashboard:member-profile' group.id member.id %}"
+            hx-target="#messages-list-container"
+            hx-swap="outerHTML"
+            hx-trigger="change, keyup changed delay:300ms from:#term-filter-input"
+            class="flex items-center space-x-2">
+        <input type="text"
+               id="term-filter-input"
+               name="term"
+               value="{{ term_filter }}"
+               placeholder="Buscar no texto..."
+               class="px-2.5 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+        <select name="status_msg"
+                class="px-2.5 py-1 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+          <option value="all" {% if status_msg == 'all' %}selected{% endif %}>Todas as msgs</option>
+          <option value="active" {% if status_msg == 'active' %}selected{% endif %}>Apenas ativas</option>
+          <option value="deleted" {% if status_msg == 'deleted' %}selected{% endif %}>Apenas removidas</option>
+        </select>
+      </form>
     </div>
 
     {% include 'dashboard/partials/member_messages_list.html' %}

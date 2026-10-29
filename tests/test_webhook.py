@@ -263,3 +263,115 @@ def test_webhook_handles_edited_and_deleted_messages(monitored_group):
     assert msg.deleted_at is not None
     # Texto permanece preservado para auditoria
     assert msg.text == "Texto corrigido após edição"
+
+
+@pytest.mark.django_db
+def test_message_deletion_mapping_and_protocol_revoke(monitored_group):
+    """
+    Testa o mapeamento de mensagens apagadas via:
+    1. messages.delete com formato keys lista
+    2. messages.update com status REVOKED
+    3. messages.upsert com protocolMessage tipo REVOKE (0)
+    4. Propriedade is_deleted e MessageQuerySet (.deleted() e .active())
+    """
+    member_alice = Member.objects.create(
+        phone="5511999998888",
+        push_name="Alice",
+    )
+    GroupMembership.objects.create(
+        group=monitored_group,
+        member=member_alice,
+        role=GroupMembership.Role.MEMBER,
+    )
+
+    now = timezone.now()
+    # Criação de mensagens para cada cenário
+    msg_del_keys = Message.objects.create(
+        wa_id="MSG_DEL_KEYS_001",
+        group=monitored_group,
+        member=member_alice,
+        type=Message.MessageType.TEXT,
+        text="Mensagem a ser apagada com payload keys",
+        sent_at=now,
+    )
+    msg_update_rev = Message.objects.create(
+        wa_id="MSG_UPD_REV_002",
+        group=monitored_group,
+        member=member_alice,
+        type=Message.MessageType.TEXT,
+        text="Mensagem a ser apagada com update REVOKED",
+        sent_at=now,
+    )
+    msg_proto_rev = Message.objects.create(
+        wa_id="MSG_PROTO_REV_003",
+        group=monitored_group,
+        member=member_alice,
+        type=Message.MessageType.TEXT,
+        text="Mensagem a ser apagada via protocolMessage revoke",
+        sent_at=now,
+    )
+
+    assert not msg_del_keys.is_deleted
+    assert Message.objects.filter(group=monitored_group).active().count() >= 3
+
+    # 1. Evento messages.delete com payload no formato data.keys = [...]
+    event_keys = WebhookEvent.objects.create(
+        event_type="MESSAGES_DELETE",
+        payload={"data": {"keys": [{"id": "MSG_DEL_KEYS_001", "remoteJid": monitored_group.jid}]}},
+    )
+    process_webhook_event_task(event_keys.id)
+    msg_del_keys.refresh_from_db()
+    assert msg_del_keys.is_deleted
+    assert msg_del_keys.deleted_at is not None
+
+    # 2. Evento messages.update com status REVOKED
+    event_upd = WebhookEvent.objects.create(
+        event_type="MESSAGES_UPDATE",
+        payload={
+            "data": [
+                {
+                    "key": {"id": "MSG_UPD_REV_002", "remoteJid": monitored_group.jid},
+                    "update": {"status": "REVOKED"},
+                }
+            ]
+        },
+    )
+    process_webhook_event_task(event_upd.id)
+    msg_update_rev.refresh_from_db()
+    assert msg_update_rev.is_deleted
+
+    # 3. Evento messages.upsert com protocolMessage REVOKE
+    event_upsert_revoke = WebhookEvent.objects.create(
+        event_type="MESSAGES_UPSERT",
+        payload={
+            "data": {
+                "key": {
+                    "id": "PROTOCOL_REVOKE_CONTAINER_999",
+                    "remoteJid": monitored_group.jid,
+                    "fromMe": False,
+                    "participant": member_alice.phone + "@s.whatsapp.net",
+                },
+                "message": {
+                    "protocolMessage": {
+                        "key": {
+                            "id": "MSG_PROTO_REV_003",
+                            "remoteJid": monitored_group.jid,
+                        },
+                        "type": 0,
+                    }
+                },
+                "messageTimestamp": int(now.timestamp()),
+            }
+        },
+    )
+    process_webhook_event_task(event_upsert_revoke.id)
+    msg_proto_rev.refresh_from_db()
+    assert msg_proto_rev.is_deleted
+    # Não deve ter criado mensagem lixo para o PROTOCOL_REVOKE_CONTAINER_999
+    assert not Message.objects.filter(wa_id="PROTOCOL_REVOKE_CONTAINER_999").exists()
+
+    # 4. MessageQuerySet
+    deleted_msgs = Message.objects.filter(group=monitored_group).deleted()
+    assert msg_del_keys in deleted_msgs
+    assert msg_update_rev in deleted_msgs
+    assert msg_proto_rev in deleted_msgs

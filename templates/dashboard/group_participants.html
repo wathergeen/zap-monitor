@@ -46,7 +46,7 @@
           hx-get="{% url 'dashboard:group-participants' group.id %}"
           hx-target="#participants-table-container"
           hx-trigger="change, keyup changed delay:300ms from:#search-input"
-          class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
       <div>
         <label for="search-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
           Buscar por Nome ou Telefone
@@ -83,6 +83,22 @@
           <option value="member" {% if role_filter == 'member' %}selected{% endif %}>Membro</option>
           <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Admin</option>
           <option value="superadmin" {% if role_filter == 'superadmin' %}selected{% endif %}>Superadmin</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="sort-by-select" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+          Ordenar Por
+        </label>
+        <select id="sort-by-select"
+                name="sort_by"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+          <option value="messages_desc" {% if sort_by == 'messages_desc' %}selected{% endif %}>Mais Mensagens (Padrão)</option>
+          <option value="messages_asc" {% if sort_by == 'messages_asc' %}selected{% endif %}>Menos Mensagens</option>
+          <option value="joined_desc" {% if sort_by == 'joined_desc' %}selected{% endif %}>Entrada Mais Recente</option>
+          <option value="joined_asc" {% if sort_by == 'joined_asc' %}selected{% endif %}>Entrada Mais Antiga</option>
+          <option value="role_desc" {% if sort_by == 'role_desc' %}selected{% endif %}>Papel (Admins primeiro)</option>
+          <option value="role_asc" {% if sort_by == 'role_asc' %}selected{% endif %}>Papel (Membros primeiro)</option>
         </select>
       </div>
     </form>

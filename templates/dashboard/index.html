@@ -11,17 +11,16 @@
       <label for="group-selector" class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 shrink-0">
         Grupo Selecionado:
       </label>
-      <form method="get" action="{% url 'dashboard:home' %}" class="w-full sm:w-auto">
+      <form id="group-selector-form" method="get" action="{% url 'dashboard:home' %}" class="w-full sm:w-auto">
         <select id="group-selector" 
                 name="group_id" 
-                onchange="this.form.submit()" 
                 class="w-full sm:w-72 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
           {% for g in accessible_groups %}
             <option value="{{ g.id }}" {% if selected_group and selected_group.id == g.id %}selected{% endif %}>
               {{ g.name|default:g.jid }}
             </option>
           {% empty %}
-            <option value="">Nenhum grupo atribuído</option>
+            <option value="">Nenhum grupo com mensagens encontrado</option>
           {% endfor %}
         </select>
       </form>
@@ -174,32 +173,31 @@
         </div>
       </div>
 
-      <div class="space-y-3">
+      <div class="space-y-1.5">
         {% for msg in recent_messages %}
-          <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80 space-y-2 transition">
-            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-              <div class="flex items-center space-x-2">
+          <div class="px-3.5 py-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80 space-y-1 transition hover:border-slate-300 dark:hover:border-slate-600">
+            <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs text-slate-400">
+              <div class="flex items-center flex-wrap gap-x-2 gap-y-0.5">
                 <a href="{% url 'dashboard:member-profile' selected_group.id msg.member.id %}"
                    class="font-semibold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition">
                   {{ msg.member.push_name|default:msg.member.masked_phone|default:"Participante" }}
                 </a>
                 <span class="text-slate-300 dark:text-slate-600">&bull;</span>
-                <span class="font-medium text-slate-600 dark:text-slate-300">{{ msg.sent_at|date:"d/m/Y H:i:s" }}</span>
-                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase">
+                <span class="text-slate-500 dark:text-slate-400">{{ msg.sent_at|date:"d/m/Y H:i" }}</span>
+                <span class="text-slate-300 dark:text-slate-600">&bull;</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase">
                   {{ msg.get_type_display }}
                 </span>
-              </div>
-              <div class="flex items-center space-x-2">
-                {% if msg.edited_at %}
-                  <span class="text-amber-600 dark:text-amber-400 font-semibold" title="Editada em {{ msg.edited_at|date:'d/m/Y H:i' }}">(Editada)</span>
-                {% endif %}
                 {% if msg.deleted_at %}
-                  <span class="text-rose-600 dark:text-rose-400 font-semibold" title="Apagada em {{ msg.deleted_at|date:'d/m/Y H:i' }}">(Apagada)</span>
+                  <span class="text-red-600 dark:text-red-400 font-semibold text-xs ml-0.5" title="Removida em {{ msg.deleted_at|date:'d/m/Y H:i' }}">Removida</span>
                 {% endif %}
-                <span class="font-mono text-[10px] text-slate-400">ID: {{ msg.wa_id|truncatechars:18 }}</span>
+                {% if msg.edited_at %}
+                  <span class="text-amber-600 dark:text-amber-400 font-medium text-[11px]" title="Editada em {{ msg.edited_at|date:'d/m/Y H:i' }}">(Editada)</span>
+                {% endif %}
               </div>
+              <span class="font-mono text-[10px] text-slate-400 shrink-0">ID: {{ msg.wa_id|truncatechars:16 }}</span>
             </div>
-            <div class="text-sm text-slate-800 dark:text-slate-200 break-words whitespace-pre-wrap leading-relaxed">
+            <div class="text-xs sm:text-sm text-slate-800 dark:text-slate-200 break-words whitespace-pre-wrap leading-snug {% if msg.deleted_at %}text-slate-500 dark:text-slate-400 italic{% endif %}">
               {{ msg.text|default:"[Sem conteúdo de texto / apenas mídia]" }}
             </div>
           </div>
@@ -212,7 +210,7 @@
     </div>
   {% else %}
     <div class="p-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-      <p class="text-slate-500 dark:text-slate-400 text-sm">Nenhum grupo monitorado disponível para visualização.</p>
+      <p class="text-slate-500 dark:text-slate-400 text-sm">Nenhum grupo monitorado com mensagens disponível para visualização.</p>
     </div>
   {% endif %}
 </div>
@@ -221,6 +219,16 @@
 {% block extra_scripts %}
 <script nonce="{{ request.csp_nonce }}">
   document.addEventListener("DOMContentLoaded", function() {
+    // Listener não bloqueado por CSP para troca imediata de grupo
+    const groupSelector = document.getElementById('group-selector');
+    if (groupSelector) {
+      groupSelector.addEventListener('change', function() {
+        if (this.value) {
+          window.location.href = "{% url 'dashboard:home' %}?group_id=" + encodeURIComponent(this.value);
+        }
+      });
+    }
+
     const rawData = {{ chart_data_json|safe }};
     const ctx = document.getElementById('dailyActivityChart');
     if (ctx && rawData.labels) {

@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Count, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models import Case, Count, IntegerField, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -26,11 +26,17 @@ from apps.search.backends import get_search_backend
 logger = logging.getLogger(__name__)
 
 
-def get_user_accessible_groups(user: User):
+def get_user_accessible_groups(user: User, only_with_messages: bool = False):
     """Retorna os grupos que o usuário tem permissão para visualizar (Anti-IDOR)."""
     if user.is_admin:
-        return Group.objects.all().order_by("-monitored", "name")
-    return user.assigned_groups.filter(monitored=True).order_by("name")
+        qs = Group.objects.all().order_by("-monitored", "name")
+    else:
+        qs = user.assigned_groups.filter(monitored=True).order_by("name")
+
+    if only_with_messages:
+        qs = qs.filter(messages__isnull=False).distinct()
+
+    return qs
 
 
 def check_user_group_access(user: User, group: Group):
@@ -47,8 +53,9 @@ def home_view(request):
     Tela 2: Dashboard Geral
     Cards de indicadores (mensagens, ativos, inativos, entradas/saídas),
     gráfico diário Chart.js e ranking dos mais ativos.
+    Apresenta apenas grupos que possuem mensagens monitoradas.
     """
-    accessible_groups = get_user_accessible_groups(request.user)
+    accessible_groups = get_user_accessible_groups(request.user, only_with_messages=True)
     selected_group_id = request.GET.get("group_id")
 
     selected_group = None
@@ -188,7 +195,8 @@ def group_toggle_monitored_view(request, group_id):
 def group_participants_view(request, group_id):
     """
     Tela 4: Participantes do Grupo
-    Tabela com busca, filtros (presente/saiu, papel), ordenação, paginação e revelação de telefone auditada.
+    Tabela com busca, filtros (presente/saiu, papel), ordenação (mensagens, entrada, papel),
+    paginação e revelação de telefone auditada.
     """
     group = get_object_or_404(Group, pk=group_id)
     check_user_group_access(request.user, group)
@@ -196,6 +204,19 @@ def group_participants_view(request, group_id):
     query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "all")  # all, present, left
     role_filter = request.GET.get("role", "all")
+
+    # Tratamento de ordenação (suporta sort_by do select ou sort/direction dos cabeçalhos clicáveis)
+    sort_by_param = request.GET.get("sort_by", "").strip()
+    if sort_by_param and "_" in sort_by_param:
+        sort, direction = sort_by_param.rsplit("_", 1)
+    else:
+        sort = request.GET.get("sort", "messages")
+        direction = request.GET.get("direction", "desc")
+
+    if sort not in ("messages", "joined", "role"):
+        sort = "messages"
+    if direction not in ("asc", "desc"):
+        direction = "desc"
 
     msg_subquery = (
         Message.objects.filter(group=group, member=OuterRef("member_id"))
@@ -210,7 +231,6 @@ def group_participants_view(request, group_id):
         .annotate(
             total_messages=Coalesce(Subquery(msg_subquery, output_field=IntegerField()), Value(0))
         )
-        .order_by("-total_messages", "-joined_at")
     )
 
     if status_filter == "present":
@@ -228,16 +248,49 @@ def group_participants_view(request, group_id):
             | Q(member__lid__icontains=query)
         )
 
+    # Aplicação da ordenação escolhida
+    if sort == "joined":
+        if direction == "asc":
+            memberships = memberships.order_by("joined_at", "-total_messages")
+        else:
+            memberships = memberships.order_by("-joined_at", "-total_messages")
+    elif sort == "role":
+        role_priority = Case(
+            When(role=GroupMembership.Role.SUPERADMIN, then=Value(1)),
+            When(role=GroupMembership.Role.ADMIN, then=Value(2)),
+            When(role=GroupMembership.Role.MEMBER, then=Value(3)),
+            default=Value(4),
+            output_field=IntegerField(),
+        )
+        memberships = memberships.annotate(role_priority=role_priority)
+        if direction == "asc":
+            memberships = memberships.order_by(
+                "-role_priority", "-total_messages", "member__push_name"
+            )
+        else:
+            memberships = memberships.order_by(
+                "role_priority", "-total_messages", "member__push_name"
+            )
+    else:  # messages
+        if direction == "asc":
+            memberships = memberships.order_by("total_messages", "joined_at")
+        else:
+            memberships = memberships.order_by("-total_messages", "-joined_at")
+
     paginator = Paginator(memberships, 25)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
 
+    sort_by = f"{sort}_{direction}"
     context = {
         "group": group,
         "page_obj": page_obj,
         "query": query,
         "status_filter": status_filter,
         "role_filter": role_filter,
+        "sort": sort,
+        "direction": direction,
+        "sort_by": sort_by,
     }
 
     # Se a requisição for HTMX, renderiza apenas a tabela parcial
@@ -271,10 +324,20 @@ def member_profile_view(request, group_id, member_id):
     # Filtros de busca na linha do tempo
     type_filter = request.GET.get("type", "")
     term_filter = request.GET.get("term", "").strip()
+    status_msg = request.GET.get("status_msg", "all")
+
     if type_filter:
         messages_qs = messages_qs.filter(type=type_filter)
     if term_filter:
         messages_qs = messages_qs.filter(text__icontains=term_filter)
+    if status_msg == "deleted":
+        messages_qs = messages_qs.filter(deleted_at__isnull=False)
+    elif status_msg == "active":
+        messages_qs = messages_qs.filter(deleted_at__isnull=True)
+
+    deleted_messages_count = Message.objects.filter(
+        group=group, member=member, deleted_at__isnull=False
+    ).count()
 
     # Paginação das mensagens
     paginator = Paginator(messages_qs, 30)
@@ -315,12 +378,14 @@ def member_profile_view(request, group_id, member_id):
         "member": member,
         "membership": membership,
         "total_messages": total_messages,
+        "deleted_messages_count": deleted_messages_count,
         "is_active_this_month": is_active_this_month,
         "messages_page": messages_page,
         "cited_keywords": cited_keywords,
         "monthly_activity": monthly_activity,
         "type_filter": type_filter,
         "term_filter": term_filter,
+        "status_msg": status_msg,
     }
 
     if request.headers.get("HX-Request"):

@@ -126,8 +126,28 @@ def process_webhook_event_task(event_id: int):
 def ingest_single_message_data(item: Dict[str, Any], default_group: Group = None) -> bool:
     """
     Ingere de forma idempotente e segura um registro de mensagem vindo da Evolution API.
+    Detecta revogações de mensagens (protocolMessage REVOKE) e marca como apagada.
     Retorna True se uma nova mensagem foi gravada.
     """
+    # 1. Detecção antecipada de protocolo de revogação/exclusão (WhatsApp revoke via messages.upsert)
+    msg_container = item.get("message") or {}
+    protocol_msg = msg_container.get("protocolMessage") or {}
+    if protocol_msg:
+        proto_type = protocol_msg.get("type")
+        proto_key = protocol_msg.get("key") or {}
+        target_wa_id = proto_key.get("id")
+        if (
+            proto_type in (0, "0", "REVOKE", "revoke") or "REVOKE" in str(proto_type).upper()
+        ) and target_wa_id:
+            del_time = parse_epoch_timestamp(item.get("messageTimestamp"))
+            updated = Message.objects.filter(wa_id=target_wa_id, deleted_at__isnull=True).update(
+                deleted_at=del_time
+            )
+            logger.info(
+                f"Mensagem {target_wa_id} marcada como apagada via protocolMessage revoke (linhas afetadas: {updated})."
+            )
+            return False
+
     key = item.get("key") or {}
     wa_id = key.get("id")
     if not wa_id:
@@ -248,6 +268,7 @@ def sync_group_recent_messages(group: Group, limit: int = 50) -> int:
     """
     Sincroniza sob demanda as mensagens mais recentes da Evolution API para garantir
     tolerância total a falhas ou atrasos de entrega de webhook.
+    Mapeia mensagens apagadas caso identificadas nos registros.
     """
     if not group or not group.monitored:
         return 0
@@ -258,6 +279,34 @@ def sync_group_recent_messages(group: Group, limit: int = 50) -> int:
     records = client.find_messages(group.jid, limit=limit)
     new_count = 0
     for r in records:
+        if not isinstance(r, dict):
+            continue
+
+        # Verifica revogação em protocolMessage
+        msg_container = r.get("message") or {}
+        protocol_msg = msg_container.get("protocolMessage") or {}
+        if protocol_msg:
+            proto_type = protocol_msg.get("type")
+            proto_key = protocol_msg.get("key") or {}
+            target_wa_id = proto_key.get("id")
+            if (
+                proto_type in (0, "0", "REVOKE", "revoke") or "REVOKE" in str(proto_type).upper()
+            ) and target_wa_id:
+                del_time = parse_epoch_timestamp(r.get("messageTimestamp"))
+                Message.objects.filter(wa_id=target_wa_id, deleted_at__isnull=True).update(
+                    deleted_at=del_time
+                )
+                continue
+
+        # Verifica se o status retornado no registro é REVOKED
+        status = str(r.get("status") or "").upper()
+        stub_type = r.get("messageStubType")
+        r_id = (r.get("key") or {}).get("id") or r.get("id")
+        if (status in ("REVOKED", "5") or stub_type in (1, "1", "REVOKE")) and r_id:
+            del_time = parse_epoch_timestamp(r.get("messageTimestamp"))
+            Message.objects.filter(wa_id=r_id, deleted_at__isnull=True).update(deleted_at=del_time)
+            continue
+
         if ingest_single_message_data(r, default_group=group):
             new_count += 1
     return new_count
@@ -317,17 +366,65 @@ def _handle_message_upsert(event: WebhookEvent, data: Dict[str, Any]):
         event.save(update_fields=["status", "processed_at"])
 
 
+def _extract_deleted_wa_ids(data: Any) -> list[str]:
+    """
+    Extrai identificadores de mensagens excluídas a partir dos diferentes formatos
+    de payload emitidos pela Evolution API v2 (ex: lista de keys, key único, id direto).
+    """
+    ids = []
+    items = data if isinstance(data, list) else [data]
+    for item in items:
+        if isinstance(item, str):
+            ids.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+
+        # Formato com 'keys' (lista de keys)
+        keys_list = item.get("keys")
+        if isinstance(keys_list, list):
+            for k in keys_list:
+                if isinstance(k, dict) and k.get("id"):
+                    ids.append(str(k["id"]))
+                elif isinstance(k, str):
+                    ids.append(k)
+
+        # Formato com 'key' (dicionário)
+        key = item.get("key")
+        if isinstance(key, dict) and key.get("id"):
+            ids.append(str(key["id"]))
+        elif isinstance(key, str):
+            ids.append(key)
+
+        # Formato com 'id' direto
+        if item.get("id") and not key and not keys_list:
+            ids.append(str(item["id"]))
+
+    # Remove duplicatas preservando a ordem
+    return list(dict.fromkeys(ids))
+
+
 def _handle_message_update(event: WebhookEvent, data: Dict[str, Any]):
     """
-    Trata mensagens editadas:
-    Mantém o registro original, adiciona timestamp edited_at.
+    Trata mensagens editadas ou revogadas via evento de update:
+    Mantém o registro original, adiciona timestamp edited_at ou deleted_at.
     Nunca sobrescreve silenciosamente.
     """
     items = data if isinstance(data, list) else [data]
+    now = timezone.now()
     for item in items:
+        if not isinstance(item, dict):
+            continue
         key = item.get("key") or {}
-        wa_id = key.get("id")
+        wa_id = key.get("id") or item.get("id")
         if not wa_id:
+            continue
+
+        # Tratar revogação informada no update
+        status = str(item.get("update", {}).get("status") or item.get("status") or "").upper()
+        stub_type = item.get("messageStubType")
+        if status in ("REVOKED", "5") or stub_type in (1, "1", "REVOKE"):
+            Message.objects.filter(wa_id=wa_id, deleted_at__isnull=True).update(deleted_at=now)
             continue
 
         msg = Message.objects.filter(wa_id=wa_id).first()
@@ -335,37 +432,35 @@ def _handle_message_update(event: WebhookEvent, data: Dict[str, Any]):
             continue
 
         new_text, _ = extract_message_text_and_type(item)
-        now = timezone.now()
-
-        msg.text = new_text
-        msg.edited_at = now
-        msg.save(update_fields=["text", "edited_at"])
-        msg.update_search_vector()
+        if new_text:
+            msg.text = new_text
+            msg.edited_at = now
+            msg.save(update_fields=["text", "edited_at"])
+            msg.update_search_vector()
 
     event.status = WebhookEvent.Status.PROCESSED
-    event.processed_at = timezone.now()
+    event.processed_at = now
     event.save(update_fields=["status", "processed_at"])
 
 
 def _handle_message_delete(event: WebhookEvent, data: Dict[str, Any]):
     """
     Trata mensagens apagadas:
-    Registra deleted_at mantendo a mensagem original para fins de auditoria.
+    Mapeia os IDs recebidos no payload da Evolution API e registra deleted_at
+    mantendo a mensagem original para fins de auditoria.
     """
-    items = data if isinstance(data, list) else [data]
-    for item in items:
-        key = item.get("key") or {}
-        wa_id = key.get("id")
-        if not wa_id:
-            continue
-
-        msg = Message.objects.filter(wa_id=wa_id).first()
-        if msg and not msg.deleted_at:
-            msg.deleted_at = timezone.now()
-            msg.save(update_fields=["deleted_at"])
+    wa_ids = _extract_deleted_wa_ids(data)
+    now = timezone.now()
+    if wa_ids:
+        updated = Message.objects.filter(wa_id__in=wa_ids, deleted_at__isnull=True).update(
+            deleted_at=now
+        )
+        logger.info(
+            f"Mapeamento de exclusão: {updated} de {len(wa_ids)} mensagens marcadas como apagadas."
+        )
 
     event.status = WebhookEvent.Status.PROCESSED
-    event.processed_at = timezone.now()
+    event.processed_at = now
     event.save(update_fields=["status", "processed_at"])
 
 

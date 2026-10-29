@@ -53,6 +53,58 @@ def test_dashboard_home_view(client, admin_user, test_group):
 
 
 @pytest.mark.django_db
+def test_dashboard_group_selector_filters_groups_without_messages(client, admin_user):
+    """
+    Testa que a tela inicial (Dashboard):
+    1. Lista apenas grupos que possuem mensagens.
+    2. Ignora grupos vazios (0 mensagens).
+    3. Permite selecionar outro grupo via parâmetro group_id.
+    """
+    now = timezone.now()
+    client.force_login(admin_user)
+
+    # Grupo 1 com mensagens
+    g1 = Group.objects.create(jid="120363001@g.us", name="Grupo Ativo Um", monitored=True)
+    m1 = Member.objects.create(phone="5511999990001", push_name="User 1")
+    Message.objects.create(
+        wa_id="MSG_DASH_G1", group=g1, member=m1, text="Olá no grupo 1", sent_at=now
+    )
+
+    # Grupo 2 com mensagens
+    g2 = Group.objects.create(jid="120363002@g.us", name="Grupo Ativo Dois", monitored=True)
+    m2 = Member.objects.create(phone="5511999990002", push_name="User 2")
+    Message.objects.create(
+        wa_id="MSG_DASH_G2", group=g2, member=m2, text="Olá no grupo 2", sent_at=now
+    )
+
+    # Grupo 3 VAZIO (sem nenhuma mensagem)
+    g3 = Group.objects.create(jid="120363003@g.us", name="Grupo Vazio Sem Msg", monitored=True)
+
+    # Requisição padrão: deve conter g1 e g2, mas NÃO g3
+    resp = client.get("/")
+    assert resp.status_code == 200
+    accessible = list(resp.context["accessible_groups"])
+    assert g1 in accessible
+    assert g2 in accessible
+    assert g3 not in accessible
+
+    content = resp.content.decode("utf-8")
+    assert "Grupo Ativo Um" in content
+    assert "Grupo Ativo Dois" in content
+    assert "Grupo Vazio Sem Msg" not in content
+
+    # Seleção de outro grupo via query param group_id (g2)
+    resp_g2 = client.get(f"/?group_id={g2.id}")
+    assert resp_g2.status_code == 200
+    assert resp_g2.context["selected_group"] == g2
+
+    # Tentativa de selecionar grupo vazio (g3) não deve selecioná-lo
+    resp_g3 = client.get(f"/?group_id={g3.id}")
+    assert resp_g3.status_code == 200
+    assert resp_g3.context["selected_group"] != g3
+
+
+@pytest.mark.django_db
 def test_groups_list_and_toggle_monitored(client, admin_user, test_group):
     client.force_login(admin_user)
     resp = client.get("/groups/")
@@ -243,3 +295,181 @@ def test_admin_settings_view_actions(client, admin_user, test_group):
     analista.refresh_from_db()
     assert analista.role == User.Role.ANALISTA
     assert analista.assigned_groups.filter(id=test_group.id).exists()
+
+
+@pytest.mark.django_db
+def test_group_participants_sorting(client, admin_user, test_group):
+    """
+    Testa ordenação da tabela de participantes por:
+    - Quantidade de mensagens (desc e asc)
+    - Data de entrada (desc e asc)
+    - Papel no grupo (desc e asc)
+    """
+    import datetime
+
+    client.force_login(admin_user)
+    now = timezone.now()
+
+    # Membro 1: 10 mensagens, entrou há 5 dias, Membro
+    m1 = Member.objects.create(phone="5511911111111", push_name="Membro Dez Msgs")
+    GroupMembership.objects.create(
+        group=test_group,
+        member=m1,
+        role=GroupMembership.Role.MEMBER,
+        joined_at=now - datetime.timedelta(days=5),
+    )
+    for i in range(10):
+        Message.objects.create(
+            wa_id=f"MSG_SORT_M1_{i}",
+            group=test_group,
+            member=m1,
+            text=f"Msg {i}",
+            sent_at=now - datetime.timedelta(hours=i),
+        )
+
+    # Membro 2: 2 mensagens, entrou há 10 dias, Admin
+    m2 = Member.objects.create(phone="5511922222222", push_name="Admin Duas Msgs")
+    GroupMembership.objects.create(
+        group=test_group,
+        member=m2,
+        role=GroupMembership.Role.ADMIN,
+        joined_at=now - datetime.timedelta(days=10),
+    )
+    for i in range(2):
+        Message.objects.create(
+            wa_id=f"MSG_SORT_M2_{i}",
+            group=test_group,
+            member=m2,
+            text=f"Msg admin {i}",
+            sent_at=now - datetime.timedelta(hours=i),
+        )
+
+    # Membro 3: 0 mensagens, entrou há 1 dia, Superadmin
+    m3 = Member.objects.create(phone="5511933333333", push_name="Superadmin Zero Msgs")
+    GroupMembership.objects.create(
+        group=test_group,
+        member=m3,
+        role=GroupMembership.Role.SUPERADMIN,
+        joined_at=now - datetime.timedelta(days=1),
+    )
+
+    url = f"/groups/{test_group.id}/participants/"
+
+    # 1. Ordenação por mensagens desc
+    resp = client.get(f"{url}?sort=messages&direction=desc")
+    assert resp.status_code == 200
+    page = resp.context["page_obj"].object_list
+    assert page[0].member == m1
+    assert page[1].member == m2
+    assert page[2].member == m3
+
+    # 2. Ordenação por mensagens asc
+    resp = client.get(f"{url}?sort=messages&direction=asc")
+    assert resp.status_code == 200
+    page = resp.context["page_obj"].object_list
+    assert page[0].member == m3
+    assert page[1].member == m2
+    assert page[2].member == m1
+
+    # 3. Ordenação por data de entrada desc (mais recente primeiro)
+    resp = client.get(f"{url}?sort=joined&direction=desc")
+    assert resp.status_code == 200
+    page = resp.context["page_obj"].object_list
+    assert page[0].member == m3  # 1 dia atrás
+    assert page[1].member == m1  # 5 dias atrás
+    assert page[2].member == m2  # 10 dias atrás
+
+    # 4. Ordenação por data de entrada asc (mais antigo primeiro)
+    resp = client.get(f"{url}?sort=joined&direction=asc")
+    assert resp.status_code == 200
+    page = resp.context["page_obj"].object_list
+    assert page[0].member == m2  # 10 dias atrás
+    assert page[1].member == m1  # 5 dias atrás
+    assert page[2].member == m3  # 1 dia atrás
+
+    # 5. Ordenação por papel desc (superadmin primeiro, depois admin, depois member)
+    resp = client.get(f"{url}?sort=role&direction=desc")
+    assert resp.status_code == 200
+    page = resp.context["page_obj"].object_list
+    assert page[0].member == m3  # Superadmin
+    assert page[1].member == m2  # Admin
+    assert page[2].member == m1  # Member
+
+    # 6. Ordenação por papel asc (membros primeiro)
+    resp = client.get(f"{url}?sort=role&direction=asc")
+    assert resp.status_code == 200
+    page = resp.context["page_obj"].object_list
+    assert page[0].member == m1  # Member
+    assert page[1].member == m2  # Admin
+    assert page[2].member == m3  # Superadmin
+
+    # 7. Teste com parâmetro sort_by unificado (do select da tela)
+    resp_select = client.get(f"{url}?sort_by=joined_desc")
+    assert resp_select.status_code == 200
+    assert resp_select.context["sort"] == "joined"
+    assert resp_select.context["direction"] == "desc"
+    assert resp_select.context["page_obj"].object_list[0].member == m3
+
+
+@pytest.mark.django_db
+def test_messages_presentation_and_removed_indicator(client, admin_user, test_group, test_member):
+    """
+    Testa a apresentação simplificada e compacta das mensagens,
+    e a exibição do texto 'Removida' em vermelho ao lado do tipo 'Texto'.
+    """
+    client.force_login(admin_user)
+    now = timezone.now()
+
+    # Mensagem normal ativa
+    Message.objects.create(
+        wa_id="MSG_PRES_ACTIVE_001",
+        group=test_group,
+        member=test_member,
+        type=Message.MessageType.TEXT,
+        text="Conteúdo de mensagem normal ativa",
+        sent_at=now,
+    )
+
+    # Mensagem apagada/removida
+    Message.objects.create(
+        wa_id="MSG_PRES_DELETED_002",
+        group=test_group,
+        member=test_member,
+        type=Message.MessageType.TEXT,
+        text="Conteúdo que foi removido pelo usuário",
+        sent_at=now,
+        deleted_at=now,
+    )
+
+    # 1. Página inicial (Dashboard)
+    resp_home = client.get("/")
+    assert resp_home.status_code == 200
+    content_home = resp_home.content.decode("utf-8")
+
+    # Verifica tipo 'Texto'
+    assert "Texto" in content_home
+    # Verifica a mensagem 'Removida' em vermelho
+    assert "Removida" in content_home
+    assert "text-red-600" in content_home
+
+    # 2. Página de perfil do participante
+    profile_url = f"/groups/{test_group.id}/participants/{test_member.id}/"
+    resp_prof = client.get(profile_url)
+    assert resp_prof.status_code == 200
+    content_prof = resp_prof.content.decode("utf-8")
+    assert "Removida" in content_prof
+    assert "text-red-600" in content_prof
+
+    # 3. Filtro por status na linha do tempo do participante (HTMX)
+    # Apenas ativas
+    resp_act = client.get(f"{profile_url}?status_msg=active", HTTP_HX_REQUEST="true")
+    content_act = resp_act.content.decode("utf-8")
+    assert "Conteúdo de mensagem normal ativa" in content_act
+    assert "Conteúdo que foi removido" not in content_act
+
+    # Apenas removidas
+    resp_del = client.get(f"{profile_url}?status_msg=deleted", HTTP_HX_REQUEST="true")
+    content_del = resp_del.content.decode("utf-8")
+    assert "Conteúdo que foi removido" in content_del
+    assert "Removida" in content_del
+    assert "Conteúdo de mensagem normal ativa" not in content_del

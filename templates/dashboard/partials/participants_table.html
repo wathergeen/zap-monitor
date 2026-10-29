@@ -6,10 +6,58 @@
         <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
           <th class="px-4 sm:px-6 py-3.5">Participante</th>
           <th class="px-4 sm:px-6 py-3.5">Telefone</th>
-          <th class="px-4 sm:px-6 py-3.5">Papel no Grupo</th>
+          <th class="px-4 sm:px-6 py-3.5">
+            <button type="button"
+                    hx-get="{% url 'dashboard:group-participants' group.id %}?q={{ query }}&status={{ status_filter }}&role={{ role_filter }}&sort=role&direction={% if sort == 'role' and direction == 'desc' %}asc{% else %}desc{% endif %}"
+                    hx-target="#participants-table-container"
+                    class="inline-flex items-center space-x-1 uppercase tracking-wider text-xs font-semibold hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer">
+              <span>Papel no Grupo</span>
+              {% if sort == 'role' %}
+                {% if direction == 'desc' %}
+                  <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                {% else %}
+                  <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                {% endif %}
+              {% else %}
+                <svg class="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+              {% endif %}
+            </button>
+          </th>
           <th class="px-4 sm:px-6 py-3.5">Status</th>
-          <th class="px-4 sm:px-6 py-3.5 text-center">Mensagens</th>
-          <th class="px-4 sm:px-6 py-3.5">Data de Entrada</th>
+          <th class="px-4 sm:px-6 py-3.5 text-center">
+            <button type="button"
+                    hx-get="{% url 'dashboard:group-participants' group.id %}?q={{ query }}&status={{ status_filter }}&role={{ role_filter }}&sort=messages&direction={% if sort == 'messages' and direction == 'desc' %}asc{% else %}desc{% endif %}"
+                    hx-target="#participants-table-container"
+                    class="inline-flex items-center justify-center space-x-1 uppercase tracking-wider text-xs font-semibold hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer">
+              <span>Mensagens</span>
+              {% if sort == 'messages' %}
+                {% if direction == 'desc' %}
+                  <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                {% else %}
+                  <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                {% endif %}
+              {% else %}
+                <svg class="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+              {% endif %}
+            </button>
+          </th>
+          <th class="px-4 sm:px-6 py-3.5">
+            <button type="button"
+                    hx-get="{% url 'dashboard:group-participants' group.id %}?q={{ query }}&status={{ status_filter }}&role={{ role_filter }}&sort=joined&direction={% if sort == 'joined' and direction == 'desc' %}asc{% else %}desc{% endif %}"
+                    hx-target="#participants-table-container"
+                    class="inline-flex items-center space-x-1 uppercase tracking-wider text-xs font-semibold hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer">
+              <span>Data de Entrada</span>
+              {% if sort == 'joined' %}
+                {% if direction == 'desc' %}
+                  <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                {% else %}
+                  <svg class="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+                {% endif %}
+              {% else %}
+                <svg class="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+              {% endif %}
+            </button>
+          </th>
           <th class="px-4 sm:px-6 py-3.5 text-right">Ações</th>
         </tr>
       </thead>
@@ -100,14 +148,14 @@
       </span>
       <div class="flex items-center space-x-2">
         {% if page_obj.has_previous %}
-          <button hx-get="{% url 'dashboard:group-participants' group.id %}?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}&role={{ role_filter }}"
+          <button hx-get="{% url 'dashboard:group-participants' group.id %}?page={{ page_obj.previous_page_number }}&q={{ query }}&status={{ status_filter }}&role={{ role_filter }}&sort={{ sort }}&direction={{ direction }}&sort_by={{ sort_by }}"
                   hx-target="#participants-table-container"
                   class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
             Anterior
           </button>
         {% endif %}
         {% if page_obj.has_next %}
-          <button hx-get="{% url 'dashboard:group-participants' group.id %}?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&role={{ role_filter }}"
+          <button hx-get="{% url 'dashboard:group-participants' group.id %}?page={{ page_obj.next_page_number }}&q={{ query }}&status={{ status_filter }}&role={{ role_filter }}&sort={{ sort }}&direction={{ direction }}&sort_by={{ sort_by }}"
                   hx-target="#participants-table-container"
                   class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
             Próxima

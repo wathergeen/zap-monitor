@@ -137,6 +137,14 @@ class GroupMetricsService:
             left_at__lt=end_date,
         ).count()
 
+        # Mensagens apagadas no mês
+        deleted_messages_count = Message.objects.filter(
+            group=self.group,
+            sent_at__gte=start_date,
+            sent_at__lt=end_date,
+            deleted_at__isnull=False,
+        ).count()
+
         return {
             "total_messages": total_messages,
             "active_members_count": active_members_count,
@@ -144,6 +152,7 @@ class GroupMetricsService:
             "current_members_count": current_members_count,
             "new_entries": new_entries,
             "exits": exits,
+            "deleted_messages_count": deleted_messages_count,
             "target_year": target_year,
             "target_month": target_month,
         }
