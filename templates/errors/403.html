@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}403 - Acesso Negado{% endblock %}
+{% block auth_content %}
+<div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+  <div class="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4 font-bold text-2xl">
+    403
+  </div>
+  <h1 class="text-xl font-bold text-slate-900 dark:text-white">Acesso Não Autorizado</h1>
+  <p class="text-sm text-slate-600 dark:text-slate-300 mt-2">
+    Você não possui permissão para acessar este recurso ou grupo.
+  </p>
+  <div class="mt-6">
+    <a href="{% url 'dashboard:home' %}" class="inline-block py-2 px-5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow transition">
+      Voltar ao Início
+    </a>
+  </div>
+</div>
+{% endblock %}
+

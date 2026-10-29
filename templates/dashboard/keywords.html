@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+
+{% block title %}Palavras-chave - {{ group.name|default:group.jid }} | ZapMonitor{% endblock %}
+{% block page_title %}Monitoramento de Palavras-chave{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Cabeçalho do Grupo -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+    <div>
+      <div class="flex items-center space-x-2">
+        <a href="{% url 'dashboard:groups-list' %}" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center">
+          <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+          Voltar para Grupos
+        </a>
+      </div>
+      <h2 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-1.5">{{ group.name|default:group.jid }}</h2>
+      <p class="text-xs font-mono text-slate-400 mt-0.5 truncate max-w-md">Gestão de termos monitorados</p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+      {% if selected_term and user.can_export %}
+        <a href="{% url 'dashboard:export-csv' group.id %}?type=keywords&term={{ selected_term }}"
+           class="inline-flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Exportar Citações CSV
+        </a>
+      {% endif %}
+      <a href="{% url 'dashboard:group-participants' group.id %}"
+         class="inline-flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        Ver Participantes
+      </a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Coluna 1: Cadastro e Lista de Palavras-chave -->
+    <div class="space-y-6">
+      <!-- Formulário de Adição (Analista e Admin) -->
+      {% if user.is_analista %}
+        <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Nova Palavra-chave</h3>
+          <form method="post" action="{% url 'dashboard:keywords' group.id %}" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+            <div>
+              <label for="id-keyword-term" class="sr-only">Termo para monitorar</label>
+              <input type="text"
+                     id="id-keyword-term"
+                     name="term"
+                     placeholder="Ex: promoção, reclamação, suporte..."
+                     required
+                     class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+            </div>
+            <button type="submit"
+                    class="w-full py-2.5 px-4 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-sm">
+              Adicionar e Iniciar Backfill
+            </button>
+          </form>
+        </div>
+      {% endif %}
+
+      <!-- Lista de Palavras Monitoradas -->
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Termos Cadastrados</h3>
+          <span class="text-xs text-slate-500 dark:text-slate-400 font-semibold">{{ keywords|length }}</span>
+        </div>
+        <div class="divide-y divide-slate-100 dark:divide-slate-700/60 max-h-96 overflow-y-auto">
+          {% for kw in keywords %}
+            <div class="p-3.5 flex items-center justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-750 transition {% if selected_term == kw.term %}bg-indigo-50/50 dark:bg-indigo-950/30{% endif %}">
+              <a href="{% url 'dashboard:keywords' group.id %}?term={{ kw.term }}"
+                 class="flex items-center space-x-2 text-sm font-medium {% if selected_term == kw.term %}text-indigo-600 dark:text-indigo-400 font-bold{% else %}text-slate-800 dark:text-slate-200{% endif %} hover:underline truncate">
+                <span class="w-2 h-2 rounded-full shrink-0 {% if kw.active %}bg-emerald-500{% else %}bg-slate-400{% endif %}"></span>
+                <span class="truncate">{{ kw.term }}</span>
+              </a>
+
+              {% if user.is_analista %}
+                <div class="flex items-center space-x-1 shrink-0">
+                  <!-- Toggle Ativo/Pausado -->
+                  <form method="post" action="{% url 'dashboard:keywords' group.id %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="toggle">
+                    <input type="hidden" name="keyword_id" value="{{ kw.id }}">
+                    <button type="submit"
+                            title="{% if kw.active %}Pausar{% else %}Ativar{% endif %}"
+                            class="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 focus:outline-none">
+                      {% if kw.active %}
+                        <span class="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">Ativo</span>
+                      {% else %}
+                        <span class="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">Pausa</span>
+                      {% endif %}
+                    </button>
+                  </form>
+
+                  <!-- Delete -->
+                  <form method="post" action="{% url 'dashboard:keywords' group.id %}" class="inline" onsubmit="return confirm('Deseja realmente remover esta palavra-chave?')">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="keyword_id" value="{{ kw.id }}">
+                    <button type="submit"
+                            title="Remover"
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition focus:outline-none">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                      </svg>
+                    </button>
+                  </form>
+                </div>
+              {% endif %}
+            </div>
+          {% empty %}
+            <div class="p-6 text-center text-xs text-slate-400">
+              Nenhuma palavra-chave cadastrada.
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Coluna 2 e 3: Relatório de Citações -->
+    <div class="lg:col-span-2 space-y-4">
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">
+            {% if selected_term %}
+              Citações de "<span class="text-indigo-600 dark:text-indigo-400">{{ selected_term }}</span>"
+            {% else %}
+              Relatório de Citações
+            {% endif %}
+          </h3>
+          {% if selected_term %}
+            <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+              {{ citations|length }} ocorrência(s) recente(s)
+            </span>
+          {% endif %}
+        </div>
+
+        {% if selected_term %}
+          <div class="space-y-3">
+            {% for item in citations %}
+              <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80 space-y-1.5">
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-slate-800 dark:text-slate-200">
+                      {{ item.message.member.push_name|default:item.message.member.masked_phone }}
+                    </span>
+                    <span class="text-slate-300 dark:text-slate-600">•</span>
+                    <span>{{ item.message.sent_at|date:"d/m/Y H:i" }}</span>
+                  </div>
+                  <span class="font-mono text-[10px] text-slate-400">ID: {{ item.message.wa_id|truncatechars:18 }}</span>
+                </div>
+                <div class="text-sm text-slate-800 dark:text-slate-200 leading-relaxed break-words">
+                  {{ item.highlighted_text|safe }}
+                </div>
+              </div>
+            {% empty %}
+              <div class="py-12 text-center text-sm text-slate-400">
+                Nenhuma mensagem encontrada contendo o termo "<strong>{{ selected_term }}</strong>".
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="py-12 text-center text-sm text-slate-400">
+            Selecione uma palavra-chave ao lado para visualizar as citações e contexto das mensagens.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

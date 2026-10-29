@@ -1,0 +1,121 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>{% block title %}ZapMonitor - Monitor de Grupos WhatsApp{% endblock %}</title>
+  
+  <!-- CSS Compilado Localmente (Sem CDN) -->
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  
+  <!-- Prevenção imediata de FOUC no Tema Escuro -->
+  <script nonce="{{ request.csp_nonce }}">
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  </script>
+
+  <!-- Scripts Locais (Sem CDN) -->
+  <script src="{% static 'js/htmx.min.js' %}" defer></script>
+  <script src="{% static 'js/chart.umd.min.js' %}" defer></script>
+  <script src="{% static 'js/alpine.min.js' %}" defer></script>
+  
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200 antialiased font-sans" 
+      x-data="{ mobileMenuOpen: false }"
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  
+  <!-- Região de anúncios dinâmicos de acessibilidade (WCAG 2.1 AA) -->
+  <div id="aria-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  {% if user.is_authenticated %}
+  <div class="min-h-screen flex flex-col">
+    <!-- Barra Lateral de Navegação (Desktop fixa + Drawer Mobile) -->
+    {% include 'components/sidebar.html' %}
+
+    <!-- Conteúdo Principal (com recuo à esquerda em md: para acomodar a sidebar fixa) -->
+    <div class="md:pl-64 flex flex-col flex-1 min-w-0">
+      <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 lg:px-8 shrink-0">
+        <!-- Lado Esquerdo: Hamburger Mobile + Título Contextual -->
+        <div class="flex items-center space-x-3 min-w-0">
+          <button type="button"
+                  @click="mobileMenuOpen = true"
+                  class="md:hidden p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shrink-0"
+                  aria-label="Abrir menu de navegação">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+
+          <div class="min-w-0">
+            <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate">
+              {% block page_title %}Monitor de Grupos WhatsApp{% endblock %}
+            </h1>
+          </div>
+        </div>
+
+        <!-- Lado Direito: Ações Globais: Modo Somente Leitura + Alternador de Tema -->
+        <div class="flex items-center space-x-2 sm:space-x-3 shrink-0">
+          <span class="inline-flex items-center px-2 sm:px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+            <span class="hidden sm:inline">Modo Somente Leitura</span>
+            <span class="sm:hidden">Leitura</span>
+          </span>
+
+          <button type="button" 
+                  onclick="toggleTheme()" 
+                  class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                  aria-label="Alternar modo claro e escuro">
+            <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+            <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+      
+      <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        {% include 'components/messages.html' %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+  {% else %}
+  <!-- Layout para páginas públicas (Login, 2FA, Aceite de Convite, Erros) -->
+  <div class="min-h-screen flex flex-col justify-center py-8 px-4 sm:px-6 lg:px-8">
+    <div class="w-full max-w-md mx-auto">
+      {% include 'components/messages.html' %}
+      {% block auth_content %}{% endblock %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Configuração Segura de CSRF para HTMX com Nonce -->
+  <script nonce="{{ request.csp_nonce }}">
+    function getCsrfToken() {
+      const match = document.cookie.match(/csrftoken=([^;]+)/);
+      if (match) {
+        return decodeURIComponent(match[1]);
+      }
+      return '{{ csrf_token }}';
+    }
+
+    document.addEventListener('htmx:configRequest', function(evt) {
+      evt.detail.headers['X-CSRFToken'] = getCsrfToken();
+    });
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    }
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

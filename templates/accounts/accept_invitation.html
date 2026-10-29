@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}Aceitar Convite | ZapMonitor{% endblock %}
+
+{% block auth_content %}
+<div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8">
+  <div class="text-center mb-6">
+    <div class="inline-flex w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 items-center justify-center mb-3">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+      </svg>
+    </div>
+    <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Ativar sua Conta</h1>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+      Você foi convidado para o ZapMonitor como <strong>{{ invitation.get_role_display|default:invitation.role }}</strong>.
+    </p>
+    <p class="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-1">{{ invitation.email }}</p>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="mb-5 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-sm" role="alert">
+      {% for error in form.non_field_errors %}
+        <p>{{ error }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'accounts:accept-invitation' invitation.token %}" class="space-y-4" novalidate>
+    {% csrf_token %}
+
+    <div>
+      <label for="{{ form.full_name.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+        {{ form.full_name.label }}
+      </label>
+      {{ form.full_name }}
+      {% if form.full_name.errors %}
+        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ form.full_name.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div>
+      <label for="{{ form.password.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+        {{ form.password.label }}
+      </label>
+      {{ form.password }}
+      {% if form.password.errors %}
+        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ form.password.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div>
+      <label for="{{ form.password_confirm.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+        {{ form.password_confirm.label }}
+      </label>
+      {{ form.password_confirm }}
+      {% if form.password_confirm.errors %}
+        <p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ form.password_confirm.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <button type="submit"
+            class="w-full mt-2 py-3 px-4 rounded-xl font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition shadow-lg shadow-indigo-600/30">
+      Concluir Cadastro e Acessar
+    </button>
+  </form>
+</div>
+{% endblock %}
+

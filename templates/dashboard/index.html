@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+
+{% block title %}Visão Geral | ZapMonitor{% endblock %}
+{% block page_title %}Visão Geral do Grupo{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Seletor de Grupo e Cabeçalho de Ações -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+      <label for="group-selector" class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 shrink-0">
+        Grupo Selecionado:
+      </label>
+      <form method="get" action="{% url 'dashboard:home' %}" class="w-full sm:w-auto">
+        <select id="group-selector" 
+                name="group_id" 
+                onchange="this.form.submit()" 
+                class="w-full sm:w-72 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+          {% for g in accessible_groups %}
+            <option value="{{ g.id }}" {% if selected_group and selected_group.id == g.id %}selected{% endif %}>
+              {{ g.name|default:g.jid }}
+            </option>
+          {% empty %}
+            <option value="">Nenhum grupo atribuído</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    {% if selected_group %}
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <a href="{% url 'dashboard:group-participants' selected_group.id %}" 
+           class="inline-flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition border border-indigo-200 dark:border-indigo-800">
+          <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+          </svg>
+          Ver Participantes
+        </a>
+        <a href="{% url 'dashboard:keywords' selected_group.id %}" 
+           class="inline-flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+          <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
+          </svg>
+          Palavras-chave
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if selected_group %}
+    <!-- Cartões de Indicadores (KPIs) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total de Mensagens (Mês)</span>
+        <p class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-2 tracking-tight">{{ kpis.total_messages|default:0 }}</p>
+        <span class="text-xs text-slate-500 dark:text-slate-400 mt-2 block">Mês de referência: {{ kpis.target_month }}/{{ kpis.target_year }}</span>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Membros Ativos</span>
+        <p class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-2 tracking-tight">{{ kpis.active_members_count|default:0 }}</p>
+        <span class="text-xs text-slate-500 dark:text-slate-400 mt-2 block">&ge; 1 mensagem no mês</span>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">Membros Inativos</span>
+        <p class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-2 tracking-tight">{{ kpis.inactive_members_count|default:0 }}</p>
+        <span class="text-xs text-slate-500 dark:text-slate-400 mt-2 block">Presentes no grupo sem envio</span>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+        <span class="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Movimentação (Mês)</span>
+        <div class="flex items-center space-x-3 mt-2">
+          <span class="text-sm font-bold text-emerald-600 dark:text-emerald-400">+{{ kpis.new_entries|default:0 }} entradas</span>
+          <span class="text-sm font-bold text-rose-600 dark:text-rose-400">-{{ kpis.exits|default:0 }} saídas</span>
+        </div>
+        <span class="text-xs text-slate-500 dark:text-slate-400 mt-2 block">Total no grupo: {{ kpis.current_members_count|default:0 }}</span>
+      </div>
+    </div>
+
+    <!-- Gráfico de Atividade e Ranking -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Gráfico de Mensagens por Dia (2 colunas) -->
+      <div class="lg:col-span-2 bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Volume Diário de Mensagens
+          </h3>
+          <span class="text-xs text-slate-400">Últimos 14 dias</span>
+        </div>
+        {% if chart_data.data and kpis.total_messages > 0 %}
+          <div class="h-64 sm:h-72 lg:h-80 w-full relative">
+            <canvas id="dailyActivityChart"></canvas>
+          </div>
+        {% else %}
+          <div class="h-64 sm:h-72 lg:h-80 w-full flex flex-col items-center justify-center text-center text-slate-400">
+            <svg class="w-10 h-10 mb-2 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+            </svg>
+            <p class="text-xs">Nenhuma mensagem registrada no grupo ainda.</p>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Ranking de Membros Mais Ativos (1 coluna) -->
+      <div class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Participantes Mais Ativos
+          </h3>
+          <span class="text-xs text-slate-400">Top 8</span>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+          <ul class="divide-y divide-slate-100 dark:divide-slate-700/60 text-sm">
+            {% for item in ranking %}
+              <li class="py-3 flex items-center justify-between gap-2">
+                <div class="min-w-0 pr-2 flex items-center space-x-2.5">
+                  <div class="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 flex items-center justify-center font-bold text-xs shrink-0 border border-indigo-200 dark:border-indigo-800/60">
+                    {{ forloop.counter }}
+                  </div>
+                  <div class="min-w-0">
+                    <p class="font-medium text-slate-800 dark:text-slate-200 truncate">
+                      {{ item.member__push_name|default:"Sem nome" }}
+                    </p>
+                    <p class="text-xs text-slate-400 font-mono truncate">{{ item.member__phone|default:"LID" }}</p>
+                  </div>
+                </div>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                  {{ item.total }} msgs
+                </span>
+              </li>
+            {% empty %}
+              <li class="py-8 text-center text-xs text-slate-400">Nenhuma atividade registrada no período.</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feed de Últimas Mensagens Recebidas com Polling HTMX em Tempo Real -->
+    <div id="recent-messages-feed"
+         hx-get="{% url 'dashboard:home' %}?group_id={{ selected_group.id }}"
+         hx-trigger="every 5s"
+         hx-select="#recent-messages-feed"
+         hx-target="#recent-messages-feed"
+         hx-swap="outerHTML"
+         class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center space-x-2">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <div>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Últimas Mensagens Recebidas (Tempo Real)
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">Atualização automática a cada 5 segundos</p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-3">
+          <a href="{% url 'dashboard:home' %}?group_id={{ selected_group.id }}"
+             class="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+             title="Atualizar agora">
+            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Atualizar
+          </a>
+          <a href="{% url 'dashboard:group-participants' selected_group.id %}"
+             class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
+            Ver por participante &rarr;
+          </a>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        {% for msg in recent_messages %}
+          <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80 space-y-2 transition">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+              <div class="flex items-center space-x-2">
+                <a href="{% url 'dashboard:member-profile' selected_group.id msg.member.id %}"
+                   class="font-semibold text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition">
+                  {{ msg.member.push_name|default:msg.member.masked_phone|default:"Participante" }}
+                </a>
+                <span class="text-slate-300 dark:text-slate-600">&bull;</span>
+                <span class="font-medium text-slate-600 dark:text-slate-300">{{ msg.sent_at|date:"d/m/Y H:i:s" }}</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase">
+                  {{ msg.get_type_display }}
+                </span>
+              </div>
+              <div class="flex items-center space-x-2">
+                {% if msg.edited_at %}
+                  <span class="text-amber-600 dark:text-amber-400 font-semibold" title="Editada em {{ msg.edited_at|date:'d/m/Y H:i' }}">(Editada)</span>
+                {% endif %}
+                {% if msg.deleted_at %}
+                  <span class="text-rose-600 dark:text-rose-400 font-semibold" title="Apagada em {{ msg.deleted_at|date:'d/m/Y H:i' }}">(Apagada)</span>
+                {% endif %}
+                <span class="font-mono text-[10px] text-slate-400">ID: {{ msg.wa_id|truncatechars:18 }}</span>
+              </div>
+            </div>
+            <div class="text-sm text-slate-800 dark:text-slate-200 break-words whitespace-pre-wrap leading-relaxed">
+              {{ msg.text|default:"[Sem conteúdo de texto / apenas mídia]" }}
+            </div>
+          </div>
+        {% empty %}
+          <div class="p-8 text-center text-slate-400 text-sm">
+            Nenhuma mensagem recebida neste grupo até o momento.
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div class="p-12 text-center bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+      <p class="text-slate-500 dark:text-slate-400 text-sm">Nenhum grupo monitorado disponível para visualização.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script nonce="{{ request.csp_nonce }}">
+  document.addEventListener("DOMContentLoaded", function() {
+    const rawData = {{ chart_data_json|safe }};
+    const ctx = document.getElementById('dailyActivityChart');
+    if (ctx && rawData.labels) {
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: rawData.labels,
+          datasets: [{
+            label: 'Mensagens',
+            data: rawData.data,
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 2,
+            pointRadius: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    }
+  });
+</script>
+{% endblock %}

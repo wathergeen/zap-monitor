@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Configurar Autenticador TOTP | ZapMonitor{% endblock %}
+{% block page_title %}Segurança e Autenticação (2FA){% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+  <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+    <div class="flex items-center space-x-3 mb-6">
+      <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-xl font-bold text-slate-900 dark:text-white">Configurar Autenticador TOTP</h2>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Proteja sua conta ativando a verificação em duas etapas padrão RFC 6238.</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center border-t border-slate-100 dark:border-slate-700/60 pt-6">
+      <!-- QR Code -->
+      <div class="flex flex-col items-center text-center p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+          1. Escaneie com seu app (Google Authenticator, Bitwarden, 1Password)
+        </span>
+        {% if qr_base64 %}
+          <div class="p-2 bg-white rounded-lg shadow-sm border border-slate-200 inline-block">
+            <img src="data:image/png;base64,{{ qr_base64 }}" alt="QR Code para Autenticador TOTP" class="w-48 h-48 block">
+          </div>
+        {% else %}
+          <p class="text-sm text-rose-500">Erro ao renderizar imagem QR Code.</p>
+        {% endif %}
+      </div>
+
+      <!-- Formulário de Confirmação -->
+      <div>
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 block">
+          2. Digite o código de 6 dígitos gerado
+        </span>
+
+        {% if form.non_field_errors %}
+          <div class="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-sm" role="alert">
+            {% for error in form.non_field_errors %}
+              <p>{{ error }}</p>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'accounts:totp-setup' %}" class="space-y-4" novalidate>
+          {% csrf_token %}
+
+          <div>
+            <label for="{{ form.code.id_for_label }}" class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+              {{ form.code.label }}
+            </label>
+            {{ form.code }}
+            {% if form.code.errors %}
+              <p class="mt-1.5 text-xs text-rose-600 dark:text-rose-400 font-medium">{{ form.code.errors.0 }}</p>
+            {% endif %}
+          </div>
+
+          <button type="submit"
+                  class="w-full py-2.5 px-4 rounded-xl font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition shadow-md shadow-indigo-600/20">
+            Confirmar e Ativar 2FA
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

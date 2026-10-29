@@ -1,0 +1,737 @@
+{% extends 'base.html' %}
+
+{% block title %}Configurações & Auditoria | ZapMonitor{% endblock %}
+{% block page_title %}Administração & Governança{% endblock %}
+
+{% block content %}
+<div class="space-y-6" 
+     x-data="{ 
+       activeTab: new URLSearchParams(window.location.search).get('tab') || 'users',
+       modalOpen: false,
+       modalTitle: 'Nova Conexão / Bot Evolution',
+       formAction: 'add_evolution_instance',
+       webhookCopied: false,
+       formData: {
+         id: '',
+         name: '',
+         api_url: '',
+         api_key: '',
+         instance_name: '',
+         webhook_secret: '',
+         active: true
+       },
+       openAddModal() {
+         this.formAction = 'add_evolution_instance';
+         this.modalTitle = 'Nova Conexão / Bot Evolution';
+         this.formData = { id: '', name: '', api_url: '', api_key: '', instance_name: '', webhook_secret: '', active: true };
+         this.modalOpen = true;
+       },
+       openEditModal(inst) {
+         this.formAction = 'update_evolution_instance';
+         this.modalTitle = 'Editar Conexão / Bot Evolution';
+         this.formData = {
+           id: inst.id,
+           name: inst.name,
+           api_url: inst.api_url,
+           api_key: inst.api_key,
+           instance_name: inst.instance_name,
+           webhook_secret: inst.webhook_secret,
+           active: inst.active
+         };
+         this.modalOpen = true;
+       },
+       userModalOpen: false,
+       userModalData: {
+         id: '',
+         name: '',
+         email: '',
+         role: 'leitor',
+         groups: []
+       },
+       openUserPermsModal(user) {
+         this.userModalData = {
+           id: user.id,
+           name: user.name,
+           email: user.email,
+           role: user.role,
+           groups: [...user.groups]
+         };
+         this.userModalOpen = true;
+       },
+       selectAllGroups(allIds) {
+         this.userModalData.groups = [...allIds];
+       },
+       deselectAllGroups() {
+         this.userModalData.groups = [];
+       }
+     }">
+
+  <!-- Navegação por Abas (Responsiva com scroll horizontal) -->
+  <div class="border-b border-slate-200 dark:border-slate-700">
+    <nav class="flex overflow-x-auto space-x-2 sm:space-x-4 pb-px no-scrollbar" aria-label="Abas de Configuração">
+      <button type="button"
+              @click="activeTab = 'users'" 
+              :class="activeTab === 'users' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'"
+              class="py-3 px-3 border-b-2 text-xs sm:text-sm transition focus:outline-none shrink-0 whitespace-nowrap">
+        Usuários & Permissões
+      </button>
+
+      <button type="button"
+              @click="activeTab = 'invites'" 
+              :class="activeTab === 'invites' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'"
+              class="py-3 px-3 border-b-2 text-xs sm:text-sm transition focus:outline-none shrink-0 whitespace-nowrap">
+        Convites de Uso Único
+      </button>
+
+      <button type="button"
+              @click="activeTab = 'evolution'" 
+              :class="activeTab === 'evolution' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'"
+              class="py-3 px-3 border-b-2 text-xs sm:text-sm transition focus:outline-none flex items-center shrink-0 whitespace-nowrap">
+        Bots & Conexões Evolution
+        {% if evolution_instances %}
+          <span class="ml-2 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+            {{ evolution_instances|length }}
+          </span>
+        {% endif %}
+      </button>
+
+      <button type="button"
+              @click="activeTab = 'audit'" 
+              :class="activeTab === 'audit' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'"
+              class="py-3 px-3 border-b-2 text-xs sm:text-sm transition focus:outline-none shrink-0 whitespace-nowrap">
+        Trilha de Auditoria (LGPD)
+      </button>
+
+      <button type="button"
+              @click="activeTab = 'jobs'" 
+              :class="activeTab === 'jobs' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'"
+              class="py-3 px-3 border-b-2 text-xs sm:text-sm transition focus:outline-none flex items-center shrink-0 whitespace-nowrap">
+        Fila de Tarefas (Procrastinate)
+        {% if failed_jobs %}
+          <span class="ml-2 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+            {{ failed_jobs|length }}
+          </span>
+        {% endif %}
+      </button>
+    </nav>
+  </div>
+
+  <!-- ABA 1: Usuários & Permissões -->
+  <div x-show="activeTab === 'users'" class="space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Usuários do Sistema & Grupos Atribuídos (Anti-IDOR)</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Defina papéis e libere o acesso a grupos específicos para cada colaborador.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
+              <th class="px-4 sm:px-6 py-3.5">Usuário</th>
+              <th class="px-4 sm:px-6 py-3.5">Papel Atual</th>
+              <th class="px-4 sm:px-6 py-3.5">Grupos Liberados</th>
+              <th class="px-4 sm:px-6 py-3.5 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
+            {% for u in users %}
+              <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-750 transition">
+                <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                  <div class="font-semibold text-slate-900 dark:text-white">{{ u.full_name|default:u.email }}</div>
+                  <div class="text-xs text-slate-400 font-mono mt-0.5">{{ u.email }}</div>
+                </td>
+                <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 uppercase">
+                    {{ u.get_role_display|default:u.role }}
+                  </span>
+                </td>
+                <td class="px-4 sm:px-6 py-4 text-xs text-slate-600 dark:text-slate-300 max-w-xs">
+                  {% if u.is_admin %}
+                    <span class="text-emerald-600 dark:text-emerald-400 font-semibold">Todos (Acesso Global)</span>
+                  {% else %}
+                    {% for g in u.assigned_groups.all %}
+                      <span class="inline-block px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 mr-1 mb-1">{{ g.name|default:g.jid }}</span>
+                    {% empty %}
+                      <span class="text-slate-400 italic">Nenhum grupo atribuído</span>
+                    {% endfor %}
+                  {% endif %}
+                </td>
+                <td class="px-4 sm:px-6 py-4 text-right whitespace-nowrap">
+                  <button type="button"
+                          @click="openUserPermsModal({ id: {{ u.id }}, email: '{{ u.email|escapejs }}', name: '{{ u.full_name|default:u.email|escapejs }}', role: '{{ u.role }}', groups: [{% for g in u.assigned_groups.all %}'{{ g.id }}'{% if not forloop.last %},{% endif %}{% endfor %}] })"
+                          class="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 transition shadow-sm">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                    <span>Editar Permissões</span>
+                  </button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABA 2: Convites de Uso Único -->
+  <div x-show="activeTab === 'invites'" class="space-y-6">
+    <div class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+      <h3 class="text-sm font-bold text-slate-900 dark:text-white mb-1">Enviar Novo Convite de Uso Único</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Gera um link criptográfico único válido por 3 dias para autocadastro com papel pré-definido.</p>
+      <form method="post" action="{% url 'dashboard:settings' %}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4 items-end">
+        {% csrf_token %}
+        <input type="hidden" name="form_action" value="invite">
+        <div class="sm:col-span-6">
+          <label for="inv-email" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">E-mail do Convidado</label>
+          <input type="email" id="inv-email" name="email" required placeholder="novo.usuario@empresa.com" class="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+        </div>
+        <div class="sm:col-span-3">
+          <label for="inv-role" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Papel Inicial</label>
+          <select id="inv-role" name="role" class="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+            <option value="leitor">Leitor</option>
+            <option value="analista">Analista</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="sm:col-span-3">
+          <button type="submit" class="w-full py-2.5 px-4 text-xs sm:text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm">
+            Gerar Link do Convite
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Histórico de Convites Emitidos</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
+              <th class="px-4 sm:px-6 py-3">E-mail</th>
+              <th class="px-4 sm:px-6 py-3">Papel</th>
+              <th class="px-4 sm:px-6 py-3">Expira em</th>
+              <th class="px-4 sm:px-6 py-3 text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
+            {% for inv in invitations %}
+              <tr>
+                <td class="px-4 sm:px-6 py-3.5 font-medium text-slate-900 dark:text-white">{{ inv.email }}</td>
+                <td class="px-4 sm:px-6 py-3.5 uppercase text-xs">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {{ inv.role }}
+                  </span>
+                </td>
+                <td class="px-4 sm:px-6 py-3.5 text-xs text-slate-500">{{ inv.expires_at|date:"d/m/Y H:i" }}</td>
+                <td class="px-4 sm:px-6 py-3.5 text-right whitespace-nowrap">
+                  {% if inv.is_valid %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">Pendente</span>
+                  {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">Utilizado / Expirado</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="px-6 py-10 text-center text-slate-400 text-sm">Nenhum convite emitido até o momento.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABA 3: Bots & Conexões Evolution -->
+  <div x-show="activeTab === 'evolution'" class="space-y-6">
+    <!-- Card Informativo de Webhook -->
+    <div class="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800/60 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h4 class="text-sm font-bold text-indigo-900 dark:text-indigo-300 mb-1 flex items-center gap-2">
+          <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Endpoint do Webhook para os Bots
+        </h4>
+        <p class="text-xs text-slate-600 dark:text-slate-300">
+          Cadastre esta URL no painel da Evolution API. Como a interface web do Evolution Manager não possui campo de Headers, você pode adicionar o segredo diretamente na URL (ex.: <code class="font-mono text-indigo-600 dark:text-indigo-400">/webhooks/evolution/?secret=SEU_SEGREDO</code>) ou via cabeçalho <code class="font-mono text-indigo-600 dark:text-indigo-400">X-Webhook-Secret</code>.
+        </p>
+        <div class="mt-2.5 flex flex-wrap items-center gap-2">
+          <code class="px-2.5 py-1.5 text-xs font-mono rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 select-all break-all">
+            {{ request.scheme }}://{{ request.get_host }}/webhooks/evolution/
+          </code>
+          <button type="button"
+                  @click="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}/webhooks/evolution/'); webhookCopied = true; setTimeout(() => webhookCopied = false, 2000)"
+                  class="px-3 py-1.5 text-xs rounded-lg font-medium bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition focus:outline-none">
+            <span x-show="!webhookCopied">Copiar URL</span>
+            <span x-show="webhookCopied" class="text-emerald-600 dark:text-emerald-400 font-semibold">Copiado!</span>
+          </button>
+        </div>
+      </div>
+      <div class="shrink-0">
+        <button type="button"
+                @click="openAddModal()"
+                class="inline-flex items-center space-x-1.5 px-4 py-2.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          <span>Nova Conexão / Bot</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabela de Instâncias Evolution -->
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Conexões / Bots da Evolution API</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Gerencie instâncias locais ou remotas da Evolution API v2 para leitura de dados de grupos.
+          </p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
+              <th class="px-4 sm:px-6 py-3.5">Bot / Instância</th>
+              <th class="px-4 sm:px-6 py-3.5">URL da Evolution API</th>
+              <th class="px-4 sm:px-6 py-3.5">Segredo Webhook</th>
+              <th class="px-4 sm:px-6 py-3.5">Status Conexão</th>
+              <th class="px-4 sm:px-6 py-3.5">Grupos</th>
+              <th class="px-4 sm:px-6 py-3.5 text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
+            {% for inst in evolution_instances %}
+              <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-750 transition">
+                <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                  <div class="font-semibold text-slate-900 dark:text-white flex items-center space-x-2">
+                    <span>{{ inst.name }}</span>
+                    {% if not inst.active %}
+                      <span class="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">Pausado</span>
+                    {% endif %}
+                  </div>
+                  <div class="text-xs font-mono text-slate-400 mt-0.5">Instância: {{ inst.instance_name }}</div>
+                </td>
+                <td class="px-4 sm:px-6 py-4">
+                  <div class="font-mono text-xs text-slate-600 dark:text-slate-300 truncate max-w-xs" title="{{ inst.api_url }}">
+                    {{ inst.api_url }}
+                  </div>
+                </td>
+                <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                  {% if inst.webhook_secret %}
+                    <span class="font-mono text-xs text-slate-500 dark:text-slate-400" title="Segredo configurado">••••••••</span>
+                  {% else %}
+                    <span class="text-xs text-slate-400 italic">Sem segredo</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                  {% include 'dashboard/partials/evolution_status_badge.html' with instance=inst state=inst.last_state %}
+                </td>
+                <td class="px-4 sm:px-6 py-4 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {{ inst.groups.count }} grupo{{ inst.groups.count|pluralize }}
+                  </span>
+                </td>
+                <td class="px-4 sm:px-6 py-4 text-right whitespace-nowrap">
+                  <div class="inline-flex items-center space-x-1.5">
+                    <button type="button"
+                            @click="openEditModal({ id: {{ inst.id }}, name: '{{ inst.name|escapejs }}', api_url: '{{ inst.api_url|escapejs }}', api_key: '{{ inst.api_key|escapejs }}', instance_name: '{{ inst.instance_name|escapejs }}', webhook_secret: '{{ inst.webhook_secret|escapejs }}', active: {{ inst.active|yesno:'true,false' }} })"
+                            class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition">
+                      Editar
+                    </button>
+
+                    <form method="post" action="{% url 'dashboard:settings' %}" class="inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="form_action" value="sync_evolution_instance_groups">
+                      <input type="hidden" name="instance_id" value="{{ inst.id }}">
+                      <button type="submit" 
+                              class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 transition"
+                              title="Buscar e sincronizar grupos conhecidos por este bot">
+                        Sincronizar
+                      </button>
+                    </form>
+
+                    <form method="post" action="{% url 'dashboard:settings' %}" class="inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="form_action" value="toggle_evolution_instance">
+                      <input type="hidden" name="instance_id" value="{{ inst.id }}">
+                      <button type="submit" 
+                              class="px-2.5 py-1 rounded-lg text-xs font-semibold {% if inst.active %}bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 hover:bg-amber-100 border border-amber-200 dark:border-amber-800{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800{% endif %} transition">
+                        {% if inst.active %}Pausar{% else %}Ativar{% endif %}
+                      </button>
+                    </form>
+
+                    <form method="post" action="{% url 'dashboard:settings' %}" class="inline" onsubmit="return confirm('Deseja realmente remover a conexão com \'{{ inst.name|escapejs }}\'? Grupos vinculados não serão excluídos.');">
+                      {% csrf_token %}
+                      <input type="hidden" name="form_action" value="delete_evolution_instance">
+                      <input type="hidden" name="instance_id" value="{{ inst.id }}">
+                      <button type="submit" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 hover:bg-rose-100 border border-rose-200 dark:border-rose-800 transition">
+                        Excluir
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-slate-400 text-sm">
+                  <div class="max-w-md mx-auto space-y-2">
+                    <p class="font-medium text-slate-600 dark:text-slate-300">Nenhuma conexão ou bot cadastrado.</p>
+                    <p class="text-xs">Cadastre a URL e as credenciais da Evolution API para iniciar o monitoramento sem depender de arquivos .env.</p>
+                    <div class="pt-2">
+                      <button type="button" @click="openAddModal()" class="px-3.5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm">
+                        + Cadastrar Primeiro Bot
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABA 4: Trilha de Auditoria (LGPD) -->
+  <div x-show="activeTab === 'audit'" class="space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 dark:text-white">Registros de Auditoria Imutáveis</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Rastreamento de todas as ações sensíveis com retenção estrita para conformidade com a LGPD.</p>
+        </div>
+        <div>
+          <form method="get" class="inline-flex items-center">
+            <select name="action" onchange="this.form.submit()" class="text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="">Todas as ações</option>
+              {% for val, label in AuditLogAction.choices %}
+                <option value="{{ val }}" {% if action_filter == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
+              <th class="px-4 sm:px-6 py-3">Data/Hora</th>
+              <th class="px-4 sm:px-6 py-3">Usuário</th>
+              <th class="px-4 sm:px-6 py-3">Ação</th>
+              <th class="px-4 sm:px-6 py-3">Alvo / Descrição</th>
+              <th class="px-4 sm:px-6 py-3 text-right">IP</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 font-mono text-xs">
+            {% for log in audit_page_obj %}
+              <tr>
+                <td class="px-4 sm:px-6 py-3 text-slate-500 whitespace-nowrap">{{ log.created_at|date:"d/m/Y H:i:s" }}</td>
+                <td class="px-4 sm:px-6 py-3 font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{{ log.user.email|default:"Sistema" }}</td>
+                <td class="px-4 sm:px-6 py-3 whitespace-nowrap">
+                  <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    {{ log.action }}
+                  </span>
+                </td>
+                <td class="px-4 sm:px-6 py-3 text-slate-600 dark:text-slate-300 max-w-xs truncate">{{ log.target }}</td>
+                <td class="px-4 sm:px-6 py-3 text-slate-400 text-right whitespace-nowrap">{{ log.ip_address|default:"-" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5" class="px-6 py-10 text-center text-slate-400 text-sm">Sem registros de auditoria encontrados.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if audit_page_obj.has_other_pages %}
+        <div class="px-4 sm:px-6 py-3.5 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 text-xs text-slate-500">
+          <span>Página <strong>{{ audit_page_obj.number }}</strong> de <strong>{{ audit_page_obj.paginator.num_pages }}</strong></span>
+          <div class="flex items-center space-x-2">
+            {% if audit_page_obj.has_previous %}
+              <a href="?audit_page={{ audit_page_obj.previous_page_number }}&action={{ action_filter }}" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 font-semibold transition">
+                Anterior
+              </a>
+            {% endif %}
+            {% if audit_page_obj.has_next %}
+              <a href="?audit_page={{ audit_page_obj.next_page_number }}&action={{ action_filter }}" class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 font-semibold transition">
+                Próxima
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ABA 5: Fila de Tarefas (Procrastinate) -->
+  <div x-show="activeTab === 'jobs'" class="space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Tarefas com Falha na Fila do Procrastinate</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Tarefas assíncronas que atingiram o limite de retentativas e requerem intervenção.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
+              <th class="px-4 sm:px-6 py-3">Job ID</th>
+              <th class="px-4 sm:px-6 py-3">Tarefa</th>
+              <th class="px-4 sm:px-6 py-3">Tentativas</th>
+              <th class="px-4 sm:px-6 py-3">Status</th>
+              <th class="px-4 sm:px-6 py-3 text-right">Ação</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
+            {% for job in failed_jobs %}
+              <tr>
+                <td class="px-4 sm:px-6 py-3.5 font-mono font-bold text-slate-900 dark:text-white">#{{ job.id }}</td>
+                <td class="px-4 sm:px-6 py-3.5 font-mono text-slate-600 dark:text-slate-300">{{ job.task_name }}</td>
+                <td class="px-4 sm:px-6 py-3.5 text-slate-500">{{ job.attempts }}</td>
+                <td class="px-4 sm:px-6 py-3.5 whitespace-nowrap">
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                    {{ job.status }}
+                  </span>
+                </td>
+                <td class="px-4 sm:px-6 py-3.5 text-right whitespace-nowrap">
+                  <form method="post" action="{% url 'dashboard:settings' %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_action" value="retry_job">
+                    <input type="hidden" name="job_id" value="{{ job.id }}">
+                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 hover:bg-indigo-100 text-xs font-semibold border border-indigo-200 dark:border-indigo-800 transition">
+                      Reenviar Tarefa
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="px-6 py-10 text-center text-slate-400 text-sm">
+                  Nenhuma tarefa com falha no momento. Todas as filas operando normalmente.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Adicionar / Editar Instância Evolution (Responsivo) -->
+  <div x-show="modalOpen" 
+       x-cloak
+       class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+       @keydown.escape.window="modalOpen = false">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-4 sm:p-6 border border-slate-200 dark:border-slate-700 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto"
+         @click.away="modalOpen = false">
+      <div class="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-3">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white" x-text="modalTitle">Nova Conexão / Bot Evolution</h3>
+        <button type="button" @click="modalOpen = false" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition" aria-label="Fechar modal">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <form method="post" action="{% url 'dashboard:settings' %}" class="space-y-4" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="form_action" :value="formAction">
+        <input type="hidden" name="instance_id" :value="formData.id">
+
+        <div>
+          <label for="evo-name" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+            Nome de Identificação do Bot *
+          </label>
+          <input type="text" id="evo-name" name="name" x-model="formData.name" required
+                 autocomplete="off"
+                 placeholder="Ex: WhatsApp Comercial, Bot Suporte Geral"
+                 class="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+        </div>
+
+        <div>
+          <label for="evo-url" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+            URL da Evolution API *
+          </label>
+          <input type="text" id="evo-url" name="api_url" x-model="formData.api_url" required
+                 autocomplete="off"
+                 placeholder="Ex: http://localhost:8080, https://evo.empresa.com ou IP"
+                 class="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+          <span class="text-[11px] text-slate-400 mt-1 block">Aceita URLs locais (rede interna/Docker) ou remotas (HTTPS). Sem barra no final.</span>
+        </div>
+
+        <div>
+          <label for="evo-inst-name" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+            Nome da Instância *
+          </label>
+          <input type="text" id="evo-inst-name" name="instance_name" x-model="formData.instance_name" required
+                 autocomplete="off"
+                 placeholder="Ex: bot-suporte"
+                 class="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+        </div>
+
+        <div>
+          <label for="evo-api-key" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+            Chave de API (Global / Instância)
+          </label>
+          <input type="password" id="evo-api-key" name="api_key" x-model="formData.api_key"
+                 autocomplete="new-password"
+                 placeholder="Chave de autenticação"
+                 class="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+        </div>
+
+        <div>
+          <label for="evo-webhook-secret" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+            Segredo do Webhook (X-Webhook-Secret)
+          </label>
+          <input type="text" id="evo-webhook-secret" name="webhook_secret" x-model="formData.webhook_secret"
+                 autocomplete="off"
+                 placeholder="Ex: meusegredoseguro123"
+                 class="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+          <span class="text-[11px] text-slate-400 mt-1 block">O mesmo valor configurado no cabeçalho customizado do webhook na Evolution API.</span>
+        </div>
+
+        <div class="flex items-center space-x-2 pt-1">
+          <input type="checkbox" id="evo-active" name="active" x-model="formData.active"
+                 class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 focus:ring-indigo-500">
+          <label for="evo-active" class="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Conexão ativa para monitoramento
+          </label>
+        </div>
+
+        <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+          <button type="button" @click="modalOpen = false"
+                  class="w-full sm:w-auto px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition text-center">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="w-full sm:w-auto px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm text-center">
+            Salvar Conexão
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Gerenciar Permissões de Usuário (Responsivo) -->
+  <div x-show="userModalOpen" 
+       x-cloak
+       class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+       @keydown.escape.window="userModalOpen = false">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-4 sm:p-6 border border-slate-200 dark:border-slate-700 shadow-2xl space-y-4 my-auto max-h-[90vh] flex flex-col"
+         @click.away="userModalOpen = false">
+      <div class="flex justify-between items-start border-b border-slate-200 dark:border-slate-700 pb-3 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Gerenciar Permissões de Acesso</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Usuário: <span class="font-semibold text-slate-800 dark:text-slate-200" x-text="userModalData.name"></span> 
+            (<span class="font-mono text-xs text-indigo-600 dark:text-indigo-400" x-text="userModalData.email"></span>)
+          </p>
+        </div>
+        <button type="button" @click="userModalOpen = false" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition" aria-label="Fechar modal">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <form method="post" action="{% url 'dashboard:settings' %}" class="space-y-4 overflow-y-auto pr-1 flex-1">
+        {% csrf_token %}
+        <input type="hidden" name="form_action" value="update_user">
+        <input type="hidden" name="user_id" :value="userModalData.id">
+
+        <div>
+          <label for="user-role-select" class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+            Papel / Nível de Acesso *
+          </label>
+          <select id="user-role-select" 
+                  name="role" 
+                  x-model="userModalData.role"
+                  class="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition font-medium">
+            <option value="leitor">Leitor (Visualização básica de grupos atribuídos)</option>
+            <option value="analista">Analista (Visualização e relatórios de grupos atribuídos)</option>
+            <option value="admin">Administrador (Acesso irrestrito a todos os grupos e configurações)</option>
+          </select>
+        </div>
+
+        <!-- Banner Informativo para Administrador -->
+        <div x-show="userModalData.role === 'admin'" class="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-xs flex items-start space-x-2.5">
+          <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+          <div>
+            <strong class="font-semibold block">Acesso Global Irrestrito:</strong>
+            Usuários com papel de Administrador possuem acesso irrestrito a todos os grupos e conexões cadastrados no ZapMonitor, independentemente da lista de grupos atribuídos individualmente.
+          </div>
+        </div>
+
+        <!-- Grupos Atribuídos (Apenas para Leitor e Analista) -->
+        <div x-show="userModalData.role !== 'admin'" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+              Grupos Liberados para Acesso (Anti-IDOR)
+            </label>
+            {% if groups %}
+              <div class="space-x-2 text-[11px]">
+                <button type="button" 
+                        @click="selectAllGroups([{% for grp in groups %}'{{ grp.id }}'{% if not forloop.last %},{% endif %}{% endfor %}])"
+                        class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+                  Marcar todos
+                </button>
+                <span class="text-slate-300 dark:text-slate-600">|</span>
+                <button type="button" 
+                        @click="deselectAllGroups()"
+                        class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:underline">
+                  Desmarcar todos
+                </button>
+              </div>
+            {% endif %}
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Selecione quais grupos este usuário terá permissão para visualizar e auditar.
+          </p>
+
+          <div class="max-h-56 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 p-2 space-y-1">
+            {% for grp in groups %}
+              <label class="flex items-center space-x-2.5 p-2 rounded-md hover:bg-white dark:hover:bg-slate-800 transition cursor-pointer select-none">
+                <input type="checkbox" 
+                       name="groups" 
+                       value="{{ grp.id }}"
+                       x-model="userModalData.groups"
+                       :disabled="userModalData.role === 'admin'"
+                       class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 focus:ring-indigo-500">
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                    {{ grp.name|default:grp.jid }}
+                  </div>
+                  <div class="text-[10px] text-slate-400 font-mono truncate">
+                    {{ grp.jid }}
+                    {% if grp.instance %}
+                      • Bot: {{ grp.instance.name }}
+                    {% endif %}
+                  </div>
+                </div>
+              </label>
+            {% empty %}
+              <div class="py-6 text-center text-xs text-slate-400">
+                Nenhum grupo monitorado cadastrado no sistema ainda.
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 pt-3 border-t border-slate-200 dark:border-slate-700 shrink-0">
+          <button type="button" @click="userModalOpen = false"
+                  class="w-full sm:w-auto px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition text-center">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="w-full sm:w-auto px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-sm text-center">
+            Salvar Permissões
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

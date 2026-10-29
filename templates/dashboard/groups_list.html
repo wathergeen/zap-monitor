@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block title %}Grupos Monitorados | ZapMonitor{% endblock %}
+{% block page_title %}Grupos de WhatsApp{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Status da Conexão com Evolution API -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+    <div class="flex items-center space-x-3">
+      <span class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300">Conexão WhatsApp (Evolution API):</span>
+      {% if evo_state == 'connected' or evo_state == 'open' %}
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+          <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          Conectado
+        </span>
+      {% elif evo_state == 'partial' %}
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+          <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-amber-500"></span>
+          Conectado Parcialmente
+        </span>
+      {% elif evo_state == 'connecting' %}
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+          <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-amber-500"></span>
+          Conectando...
+        </span>
+      {% elif evo_state == 'not_configured' %}
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+          Nenhum bot configurado
+        </span>
+      {% else %}
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+          <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-rose-500"></span>
+          Desconectado / Indisponível
+        </span>
+      {% endif %}
+
+      {% if user.is_admin %}
+        <a href="{% url 'dashboard:groups-list' %}?refresh=1" 
+           class="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+           title="Atualizar status da conexão em tempo real">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </a>
+      {% endif %}
+    </div>
+
+    <div class="flex items-center space-x-3">
+      {% if user.is_admin %}
+        <a href="{% url 'dashboard:groups-list' %}?sync=1"
+           class="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition shadow-sm"
+           title="Buscar e importar novos grupos da Evolution API">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          <span>Sincronizar Grupos</span>
+        </a>
+      {% endif %}
+      <div class="text-xs text-slate-500 dark:text-slate-400">
+        Total de grupos: <strong class="text-slate-800 dark:text-slate-200">{{ group_items|length }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabela de Grupos -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
+            <th class="px-4 sm:px-6 py-3.5">Nome do Grupo / JID</th>
+            <th class="px-4 sm:px-6 py-3.5">Status</th>
+            <th class="px-4 sm:px-6 py-3.5">Participantes</th>
+            <th class="px-4 sm:px-6 py-3.5">Última Atividade</th>
+            <th class="px-4 sm:px-6 py-3.5 text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
+          {% for item in group_items %}
+            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-750 transition">
+              <td class="px-4 sm:px-6 py-4">
+                <div class="font-semibold text-slate-900 dark:text-white">
+                  {{ item.group.name|default:item.group.jid }}
+                </div>
+                <div class="text-xs font-mono text-slate-400 dark:text-slate-500 truncate max-w-xs mt-0.5">
+                  {{ item.group.jid }}
+                </div>
+                {% if item.group.instance %}
+                  <div class="mt-1">
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                      Bot: {{ item.group.instance.name }}
+                    </span>
+                  </div>
+                {% endif %}
+              </td>
+              <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
+                {% if item.group.monitored %}
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                    <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-500"></span>
+                    Monitorado
+                  </span>
+                {% else %}
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                    Pausado
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-4 sm:px-6 py-4 text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
+                {{ item.active_members_count }} membros
+              </td>
+              <td class="px-4 sm:px-6 py-4 text-slate-500 dark:text-slate-400 text-xs">
+                {% if item.last_message %}
+                  <div class="font-medium text-slate-700 dark:text-slate-300">{{ item.last_message.sent_at|date:"d/m/Y H:i" }}</div>
+                  <div class="truncate max-w-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ item.last_message.text|default:"[Mídia]" }}</div>
+                {% else %}
+                  <span class="italic text-slate-400">Sem mensagens</span>
+                {% endif %}
+              </td>
+              <td class="px-4 sm:px-6 py-4 text-right whitespace-nowrap">
+                <div class="inline-flex items-center gap-1.5">
+                  <a href="{% url 'dashboard:group-participants' item.group.id %}"
+                     class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900 transition border border-indigo-200 dark:border-indigo-800">
+                    Participantes
+                  </a>
+                  <a href="{% url 'dashboard:keywords' item.group.id %}"
+                     class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+                    Termos
+                  </a>
+                  {% if user.is_admin %}
+                    <a href="{% url 'dashboard:group-toggle-monitored' item.group.id %}"
+                       class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold {% if item.group.monitored %}text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 border border-amber-200 dark:border-amber-800{% else %}text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800{% endif %} transition">
+                      {% if item.group.monitored %}Pausar{% else %}Monitorar{% endif %}
+                    </a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="px-6 py-12 text-center text-slate-400 text-sm">
+                Nenhum grupo de WhatsApp cadastrado ou atribuído a este usuário.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

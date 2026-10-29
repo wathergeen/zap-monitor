@@ -1,0 +1,25 @@
+{% if messages %}
+<div class="mb-6 space-y-2" role="alert">
+  {% for message in messages %}
+  <div class="flex items-center justify-between p-4 rounded-lg text-sm font-medium border transition shadow-sm
+    {% if message.tags == 'success' %}
+      bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800
+    {% elif message.tags == 'error' or message.tags == 'danger' %}
+      bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/60 dark:text-rose-200 dark:border-rose-800
+    {% elif message.tags == 'warning' %}
+      bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800
+    {% else %}
+      bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-200 dark:border-indigo-800
+    {% endif %}"
+    x-data="{ show: true }" x-show="show">
+    <div class="flex items-center space-x-2">
+      <span>{{ message }}</span>
+    </div>
+    <button type="button" @click="show = false" class="text-current opacity-60 hover:opacity-100 p-1 rounded" aria-label="Fechar mensagem">
+      &times;
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+

@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+
+{% block title %}Participantes - {{ group.name|default:group.jid }} | ZapMonitor{% endblock %}
+{% block page_title %}Participantes do Grupo{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Barra Superior com Grupo e Exportação -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+    <div>
+      <div class="flex items-center space-x-2">
+        <a href="{% url 'dashboard:groups-list' %}" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center">
+          <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+          Voltar para Grupos
+        </a>
+      </div>
+      <h2 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-1.5">{{ group.name|default:group.jid }}</h2>
+      <p class="text-xs font-mono text-slate-400 mt-0.5 truncate max-w-md">{{ group.jid }}</p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+      {% if user.can_export %}
+        <a href="{% url 'dashboard:export-csv' group.id %}?type=participants"
+           class="inline-flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Exportar CSV
+        </a>
+      {% endif %}
+      <a href="{% url 'dashboard:keywords' group.id %}"
+         class="inline-flex items-center px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/>
+        </svg>
+        Palavras-chave
+      </a>
+    </div>
+  </div>
+
+  <!-- Filtros com HTMX -->
+  <div class="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+    <form method="get"
+          hx-get="{% url 'dashboard:group-participants' group.id %}"
+          hx-target="#participants-table-container"
+          hx-trigger="change, keyup changed delay:300ms from:#search-input"
+          class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div>
+        <label for="search-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+          Buscar por Nome ou Telefone
+        </label>
+        <input type="text"
+               id="search-input"
+               name="q"
+               value="{{ query }}"
+               placeholder="Ex: João, 5511..."
+               class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+      </div>
+
+      <div>
+        <label for="status-filter" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+          Status no Grupo
+        </label>
+        <select id="status-filter"
+                name="status"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos os status</option>
+          <option value="present" {% if status_filter == 'present' %}selected{% endif %}>Apenas Presentes</option>
+          <option value="left" {% if status_filter == 'left' %}selected{% endif %}>Apenas que Saíram</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="role-filter" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+          Papel Administrativo
+        </label>
+        <select id="role-filter"
+                name="role"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+          <option value="all" {% if role_filter == 'all' %}selected{% endif %}>Todos os papéis</option>
+          <option value="member" {% if role_filter == 'member' %}selected{% endif %}>Membro</option>
+          <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Admin</option>
+          <option value="superadmin" {% if role_filter == 'superadmin' %}selected{% endif %}>Superadmin</option>
+        </select>
+      </div>
+    </form>
+  </div>
+
+  <!-- Tabela (Container HTMX) -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    {% include 'dashboard/partials/participants_table.html' %}
+  </div>
+</div>
+{% endblock %}

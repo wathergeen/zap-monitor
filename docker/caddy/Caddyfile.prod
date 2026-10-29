@@ -1,0 +1,38 @@
+{
+    admin off
+}
+
+{$APP_DOMAIN:localhost} {
+    # Redirecionamento e TLS automático 1.2+
+    tls {$ACME_EMAIL:internal}
+
+    # Limite estrito de tamanho de corpo (2.5MB)
+    request_body {
+        max_size 2621440
+    }
+
+    # Cabeçalhos de segurança avançados
+    header {
+        -Server
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy same-origin
+    }
+
+    # Bloqueio de acesso externo ao django-admin interno (somente rede local/VPN)
+    @admin_route {
+        path /internal-admin/*
+        not remote_ip 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.1
+    }
+    respond @admin_route "Acesso restrito à rede corporativa/VPN." 403
+
+    # Proxy reverso para a aplicação Django
+    reverse_proxy web:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+    }
+}
+

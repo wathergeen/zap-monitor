@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}Perfil de {{ member.display_name }} | ZapMonitor{% endblock %}
+{% block page_title %}Perfil do Participante{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Cabeçalho do Perfil -->
+  <div class="bg-white dark:bg-slate-800 p-5 sm:p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div class="flex items-center space-x-4">
+      <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-md shrink-0">
+        {{ member.push_name|first|default:"P"|upper }}
+      </div>
+      <div>
+        <h2 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
+          {{ member.display_name }}
+        </h2>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <div id="phone-profile-container" class="inline-flex items-center space-x-1.5 font-mono">
+            <span>{{ member.masked_phone }}</span>
+            {% if member.phone and user.can_reveal_phone %}
+              <button type="button"
+                      hx-get="{% url 'dashboard:reveal-phone' member.id %}"
+                      hx-target="#phone-profile-container"
+                      hx-swap="innerHTML"
+                      class="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold focus:outline-none cursor-pointer"
+                      title="Revelar telefone e registrar log de auditoria">
+                (Revelar Telefone)
+              </button>
+            {% endif %}
+          </div>
+          <span>• Primeira aparição: {{ member.first_seen_at|date:"d/m/Y H:i" }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="shrink-0 w-full sm:w-auto">
+      <a href="{% url 'dashboard:group-participants' group.id %}" 
+         class="inline-flex items-center justify-center w-full sm:w-auto px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition">
+        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        Voltar aos Participantes
+      </a>
+    </div>
+  </div>
+
+  <!-- Indicadores Rápidos -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+    <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+      <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total de Mensagens no Grupo</span>
+      <p class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-2 tracking-tight">{{ total_messages }}</p>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+      <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Atividade no Mês Atual</span>
+      <p class="text-2xl sm:text-3xl font-bold mt-2 tracking-tight {% if is_active_this_month %}text-emerald-600 dark:text-emerald-400{% else %}text-amber-600 dark:text-amber-400{% endif %}">
+        {% if is_active_this_month %}Ativo{% else %}Inativo{% endif %}
+      </p>
+    </div>
+
+    <div class="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+      <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status de Permanência</span>
+      <p class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-2 tracking-tight">
+        {% if membership and membership.is_active %}
+          <span class="text-emerald-600 dark:text-emerald-400">Presente</span>
+        {% else %}
+          <span class="text-slate-400">Saiu do grupo</span>
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Linha do Tempo de Mensagens -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-6 space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        Histórico e Conteúdo de Mensagens
+      </h3>
+      <span class="text-xs text-slate-400">Somente leitura</span>
+    </div>
+
+    {% include 'dashboard/partials/member_messages_list.html' %}
+  </div>
+</div>
+{% endblock %}

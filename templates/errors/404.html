@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}404 - Página Não Encontrada{% endblock %}
+{% block auth_content %}
+<div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+  <div class="w-16 h-16 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-4 font-bold text-2xl">
+    404
+  </div>
+  <h1 class="text-xl font-bold text-slate-900 dark:text-white">Página Não Encontrada</h1>
+  <p class="text-sm text-slate-600 dark:text-slate-300 mt-2">
+    O recurso solicitado não existe ou foi movido.
+  </p>
+  <div class="mt-6">
+    <a href="{% url 'dashboard:home' %}" class="inline-block py-2 px-5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow transition">
+      Voltar à Página Inicial
+    </a>
+  </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,94 @@
+services:
+  proxy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - frontend
+    depends_on:
+      web:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["web"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=core.settings.dev
+      - DB_HOST=postgres
+      - DB_PORT=5432
+    volumes:
+      - static_volume:/app/staticfiles
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["worker"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=core.settings.dev
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - WORKER_CONCURRENCY=4
+    networks:
+      - backend
+      - frontend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import django, os; os.environ.setdefault(\"DJANGO_SETTINGS_MODULE\", os.environ.get(\"DJANGO_SETTINGS_MODULE\", \"core.settings.dev\")); django.setup(); from django.db import connection; connection.ensure_connection()' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - ":5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-zapbot_db}
+      POSTGRES_USER: ${DB_USER:-zapbot_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-zapbot_strong_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-zapbot_user} -d ${DB_NAME:-zapbot_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+  static_volume:

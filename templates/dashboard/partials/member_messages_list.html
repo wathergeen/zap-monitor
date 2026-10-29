@@ -1,0 +1,55 @@
+<div id="messages-list-container" class="space-y-3">
+  {% for msg in messages_page %}
+    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80 space-y-2 transition">
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <div class="flex items-center space-x-2">
+          <span class="font-medium text-slate-600 dark:text-slate-300">{{ msg.sent_at|date:"d/m/Y H:i:s" }}</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase">
+            {{ msg.get_type_display }}
+          </span>
+        </div>
+        <div class="flex items-center space-x-2">
+          {% if msg.edited_at %}
+            <span class="text-amber-600 dark:text-amber-400 font-semibold" title="Editada em {{ msg.edited_at|date:'d/m/Y H:i' }}">(Editada)</span>
+          {% endif %}
+          {% if msg.deleted_at %}
+            <span class="text-rose-600 dark:text-rose-400 font-semibold" title="Apagada em {{ msg.deleted_at|date:'d/m/Y H:i' }}">(Apagada)</span>
+          {% endif %}
+          <span class="font-mono text-[10px] text-slate-400">ID: {{ msg.wa_id|truncatechars:18 }}</span>
+        </div>
+      </div>
+      <div class="text-sm text-slate-800 dark:text-slate-200 break-words whitespace-pre-wrap leading-relaxed">
+        {{ msg.text|default:"[Sem conteúdo de texto / apenas mídia]" }}
+      </div>
+    </div>
+  {% empty %}
+    <div class="p-8 text-center text-slate-400 text-sm">
+      Nenhuma mensagem encontrada com os filtros informados.
+    </div>
+  {% endfor %}
+
+  <!-- Paginação da Linha do Tempo -->
+  {% if messages_page.has_other_pages %}
+    <div class="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 border-t border-slate-100 dark:border-slate-700/60">
+      <span>Página <strong>{{ messages_page.number }}</strong> de <strong>{{ messages_page.paginator.num_pages }}</strong></span>
+      <div class="flex items-center space-x-2">
+        {% if messages_page.has_previous %}
+          <a hx-get="?page={{ messages_page.previous_page_number }}&type={{ type_filter }}&term={{ term_filter }}"
+             hx-target="#messages-list-container"
+             hx-swap="outerHTML"
+             class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer">
+            Anterior
+          </a>
+        {% endif %}
+        {% if messages_page.has_next %}
+          <a hx-get="?page={{ messages_page.next_page_number }}&type={{ type_filter }}&term={{ term_filter }}"
+             hx-target="#messages-list-container"
+             hx-swap="outerHTML"
+             class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition cursor-pointer">
+            Próxima
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>

@@ -1,0 +1,27 @@
+{
+    admin off
+}
+
+:80 {
+    # Limite estrito de tamanho de corpo de requisições (2.5MB)
+    request_body {
+        max_size 2621440
+    }
+
+    # Cabeçalhos de segurança e remoção do cabeçalho Server
+    header {
+        -Server
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy same-origin
+    }
+
+    # Proxy reverso para o Django Gunicorn
+    reverse_proxy web:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
